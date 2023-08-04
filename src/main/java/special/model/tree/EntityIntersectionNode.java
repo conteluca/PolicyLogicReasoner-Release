@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package special.model;
+package special.model.tree;
 
 import java.util.Optional;
 import org.semanticweb.owlapi.model.OWLObject;

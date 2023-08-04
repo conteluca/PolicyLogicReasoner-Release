@@ -7,7 +7,7 @@ package special.reasoner;
 
 import java.util.*;
 import org.semanticweb.owlapi.model.*;
-import special.model.EntityIntersectionNode;
+import special.model.tree.EntityIntersectionNode;
 
 /**
  *
@@ -79,5 +79,19 @@ public abstract class PropertyNodeHierarchy<T extends OWLObject, V extends OWLCl
     @Override
     public boolean isPropertyNode() {
         return true;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        PropertyNodeHierarchy<?, ?> that = (PropertyNodeHierarchy<?, ?>) o;
+        return isFunctional() == that.isFunctional() && Objects.equals(getRanges(), that.getRanges()) && Objects.equals(rangesAsOWLClass, that.rangesAsOWLClass);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), isFunctional(), getRanges(), rangesAsOWLClass);
     }
 }

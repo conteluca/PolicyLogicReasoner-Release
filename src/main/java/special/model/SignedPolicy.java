@@ -1,4 +1,7 @@
 package special.model;
+/**
+ * @author Luca Conte
+ */
 
 public record SignedPolicy<T>(boolean permit, T data) {
     @Override

@@ -6,7 +6,6 @@
 package special.model.hierarchy;
 
 import java.util.*;
-import java.util.stream.*;
 import javax.annotation.*;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.search.*;
@@ -26,7 +25,7 @@ public class ObjectPropertyInOntology extends RawOntology<OWLObjectPropertyExpre
     public Set<OWLObjectPropertyExpression> getParentsInRawHierarchy(OWLObjectPropertyExpression child) {
         Set<OWLObjectPropertyExpression> result = new HashSet<>();
         for (OWLOntology ont : asList(getRootOntology().importsClosure())) {
-            for (OWLSubObjectPropertyOfAxiom subPropertyOf : ont.objectSubPropertyAxiomsForSubProperty(child).collect(Collectors.toList())) {
+            for (OWLSubObjectPropertyOfAxiom subPropertyOf : ont.objectSubPropertyAxiomsForSubProperty(child).toList()) {
                 if (!subPropertyOf.getSuperProperty().isAnonymous()) {
                     result.add(subPropertyOf.getSuperProperty());
                 }
@@ -39,7 +38,7 @@ public class ObjectPropertyInOntology extends RawOntology<OWLObjectPropertyExpre
     public Set<OWLObjectPropertyExpression> getChildrenInRawHierarchy(OWLObjectPropertyExpression parent) {
         Set<OWLObjectPropertyExpression> result = new HashSet<>();
         for (OWLOntology ont : asList(getRootOntology().importsClosure())) {
-            for (OWLSubObjectPropertyOfAxiom superPropertyOf : ont.objectSubPropertyAxiomsForSuperProperty(parent).collect(Collectors.toList())) {
+            for (OWLSubObjectPropertyOfAxiom superPropertyOf : ont.objectSubPropertyAxiomsForSuperProperty(parent).toList()) {
                 if (!superPropertyOf.getSubProperty().isAnonymous()) {
                     result.add(superPropertyOf.getSubProperty());
                 }
@@ -52,8 +51,8 @@ public class ObjectPropertyInOntology extends RawOntology<OWLObjectPropertyExpre
     public Set<OWLObjectPropertyExpression> getDisjointsInRawHierarchy(OWLObjectPropertyExpression el) {
         Set<OWLObjectPropertyExpression> result = new HashSet<>();
         for (OWLOntology ont : asList(getRootOntology().importsClosure())) {
-            for (OWLDisjointObjectPropertiesAxiom disjointObjectPropertiesAxiom : ont.disjointObjectPropertiesAxioms(el).collect(Collectors.toList())) {
-                for (OWLObjectPropertyExpression disjoint : disjointObjectPropertiesAxiom.properties().collect(Collectors.toList())) {
+            for (OWLDisjointObjectPropertiesAxiom disjointObjectPropertiesAxiom : ont.disjointObjectPropertiesAxioms(el).toList()) {
+                for (OWLObjectPropertyExpression disjoint : disjointObjectPropertiesAxiom.properties().toList()) {
                     if (!disjoint.isAnonymous() && !disjoint.equals(el)) {
                         result.add(disjoint);
                     }

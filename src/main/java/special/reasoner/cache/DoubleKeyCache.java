@@ -5,36 +5,25 @@
  */
 package special.reasoner.cache;
 
-import java.util.Collection;
-import special.model.ORNODE;
+import special.model.tree.ORNODE;
 
 /**
  *
  * @author Luca Ioffredo
- * @param <T> Key of the cache
+ * @param <T1> Key of the cache
  * @param <E> Value's type of the Key
  */
 public interface DoubleKeyCache<T1, T2, E> {
 
-    public boolean put(T1 key1, T2 key2, E value);
+    boolean put(T1 key1, T2 key2, E value);
 
-    public boolean put(T1 key1, T2 key2, Collection<? extends E> trees);
+    boolean put(T1 key1, T2 key2, ORNODE disjunction);
 
-    public boolean put(T1 key1, T2 key2, ORNODE disjuncts);
+    ORNODE get(T1 key1, T2 key2);
 
-    public ORNODE remove(T1 key1, T2 key2);
+    boolean isFull();
 
-    public ORNODE get(T1 key1, T2 key2);
+    int size();
 
-    public boolean containsKey(T1 key1, T2 key2);
-
-    public boolean isFull();
-
-    public void close();
-
-    public int size();
-
-    public void clear();
-
-    public void destroy();
+    void clear();
 }

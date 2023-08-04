@@ -10,7 +10,6 @@ import java.util.stream.*;
 import javax.annotation.*;
 
 import org.semanticweb.owlapi.model.*;
-import org.semanticweb.owlapi.profiles.*;
 import org.semanticweb.owlapi.reasoner.*;
 import org.semanticweb.owlapi.reasoner.impl.*;
 import org.semanticweb.owlapi.util.*;
@@ -18,22 +17,24 @@ import org.semanticweb.owlapi.vocab.*;
 import special.model.*;
 import special.model.exception.*;
 import special.model.hierarchy.*;
+import special.model.tree.ANDNODE;
+import special.model.tree.EntityIntersectionNode;
+import special.model.tree.IntRange;
+import special.model.tree.ORNODE;
 import special.reasoner.cache.*;
-import special.profile.*;
 import special.model.SignedPolicy;
 
 import static org.semanticweb.owlapi.util.OWLAPIPreconditions.*;
 import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.*;
 
 /**
- * @author Luca Ioffredo
  * @author Luca Conte
  */
 public class PLReasoner implements OWLReasoner {
 
     public static final String REASONER_NAME = "PolicyLogicReasoner";
     private static final Version VERSION = new Version(1, 5, 3, 0);
-    private static final Set<AxiomType> SUPPORTED_AXIOMS = new HashSet<>(Arrays.asList(AxiomType.SUBCLASS_OF, AxiomType.FUNCTIONAL_DATA_PROPERTY, AxiomType.DISJOINT_CLASSES, AxiomType.FUNCTIONAL_OBJECT_PROPERTY, AxiomType.OBJECT_PROPERTY_RANGE));
+    private static final Set<AxiomType<? extends OWLAxiom>> SUPPORTED_AXIOMS = new HashSet<>(Arrays.asList(AxiomType.SUBCLASS_OF, AxiomType.FUNCTIONAL_DATA_PROPERTY, AxiomType.DISJOINT_CLASSES, AxiomType.FUNCTIONAL_OBJECT_PROPERTY, AxiomType.OBJECT_PROPERTY_RANGE));
     private static final Set<InferenceType> PRECOMPUTED_INFERENCE_TYPES = new HashSet<>(Arrays.asList(InferenceType.CLASS_HIERARCHY, InferenceType.DISJOINT_CLASSES));
     private final SingleKeyCache<OWLClassExpression> fullSubClassConceptCache;
     private final SingleKeyCache<OWLClassExpression> fullSuperClassConceptCache;
@@ -44,25 +45,16 @@ public class PLReasoner implements OWLReasoner {
     private final OWLOntologyManager manager;
     private final OWLOntology rootOntology; // Ontology
     private final BufferingMode bufferingMode; // Mode BUFFERING - NON_BUFFERING. Keeps any changes in memory or use them at runtime.
-    private final OWLDataFactory dataFactory;
     private final List<OWLOntologyChange> pendingChanges; // Keeps pending changes in ontology - Only with BUFFERING
     private final RawOntologyChangeListener ontologyChangeListener; // Listener that catch changes in ontology
-    private final OWLProfile profile;
     private final HierarchyGraph<OWLClass> classHierarchy;
     private final HierarchyGraph<OWLDataProperty> dataPropertyHierarchy;
     private final HierarchyGraph<OWLObjectPropertyExpression> objectPropertyHierarchy;
     private final OWLClass bottomEntity;
-    private final OWLClass topEntity;
-    private final boolean checkNotSupportedAxioms = false;
-    private Cache<OWLClass, OWLClass> trueDisjointsCache;
-    private Cache<OWLClass, OWLClass> falseDisjointsCache;
-    private boolean reasonerIsConsistent = false; //There isn't ABOX, so always consistent
     private boolean fullTreeCache; // Cache to store concepts at runtime. If false, any concept is processed at each call
     private boolean fullIntervalSafeCache = true; // Cache to store concepts interval-safety normalized at runtime. If false, any concept is processed at each call
     private boolean simpleTreeCache;
     private boolean simpleIntervalSafeCache;
-    private boolean cacheDisjointsTrueBetweenClasses = false;
-    private boolean cacheDisjointsFalseBetweenClasses = false;
     private boolean normalizeSuperClassConcept = false;
     private boolean interrupted = false;
     private boolean isInconsistent = false;
@@ -70,8 +62,11 @@ public class PLReasoner implements OWLReasoner {
     private int stsCount = 0;
 
 
-    public PLReasoner(OWLOntology rootOntology, OWLReasonerConfiguration configuration,
-                      BufferingMode bufferingMode, SingleKeyCache singleKeyCache, DoubleKeyCache doubleKeyCache) {
+    public PLReasoner(OWLOntology rootOntology,
+                      OWLReasonerConfiguration configuration,
+                      BufferingMode bufferingMode,
+                      SingleKeyCache<OWLClassExpression> singleKeyCache,
+                      DoubleKeyCache<OWLClassExpression, OWLClassExpression, ANDNODE> doubleKeyCache) {
         this.rootOntology = checkNotNull(rootOntology, "rootOntology cannot be null");
         this.bufferingMode = checkNotNull(bufferingMode, "bufferingMode cannot be null");
         this.configuration = checkNotNull(configuration, "configuration cannot be null");
@@ -82,53 +77,33 @@ public class PLReasoner implements OWLReasoner {
         this.simpleConceptCache = new PolicyCacheInMemory<>(8192);
         this.simpleConceptIntervalSafeCache = new IntervalSafePoliciesCacheInMemory<>(8192);
 
-        this.profile = new PLProfile();
-        OWLProfileReport report = this.profile.checkOntology(this.rootOntology);
-        if (checkNotSupportedAxioms && !report.isInProfile()) {
-            System.err.println("Violation in ontology: " + this.rootOntology.getOntologyID());
-            for (final OWLProfileViolation violation : report.getViolations()) {
-                System.err.println("Violation: " + violation.getAxiom());
-                if (false) {
-                    throw new AxiomNotInProfileException(violation.getAxiom(), profile.getIRI());
-                }
-            }
-        }
-
         this.manager = this.rootOntology.getOWLOntologyManager();
-        this.dataFactory = this.manager.getOWLDataFactory();
+        OWLDataFactory dataFactory = this.manager.getOWLDataFactory();
         this.pendingChanges = new LinkedList<>();
 
         this.ontologyChangeListener = new RawOntologyChangeListener();
         this.manager.addOntologyChangeListener(this.ontologyChangeListener);
-        this.bottomEntity = this.dataFactory.getOWLNothing();
-        this.topEntity = this.dataFactory.getOWLThing();
+        this.bottomEntity = dataFactory.getOWLNothing();
+        OWLClass topEntity = dataFactory.getOWLThing();
         this.classHierarchy
                 = new ClassHierarchyInOntology(
-                this.topEntity,
+                topEntity,
                 this.bottomEntity,
-                new ClassInOntology(this.rootOntology, this.dataFactory));
+                new ClassInOntology(this.rootOntology, dataFactory));
         this.dataPropertyHierarchy
                 = new DataPropertyHierarchyInOntology(
-                this.dataFactory.getOWLTopDataProperty(),
-                this.dataFactory.getOWLBottomDataProperty(),
-                new DataPropertyInOntology(this.rootOntology, this.dataFactory));
+                dataFactory.getOWLTopDataProperty(),
+                dataFactory.getOWLBottomDataProperty(),
+                new DataPropertyInOntology(this.rootOntology, dataFactory));
         this.objectPropertyHierarchy
                 = new ObjectPropertyHierarchyInOntology(
-                this.dataFactory.getOWLTopObjectProperty(),
-                this.dataFactory.getOWLBottomObjectProperty(),
-                new ObjectPropertyInOntology(this.rootOntology, this.dataFactory));
+                dataFactory.getOWLTopObjectProperty(),
+                dataFactory.getOWLBottomObjectProperty(),
+                new ObjectPropertyInOntology(this.rootOntology, dataFactory));
         this.prepareHierarchy();
 
         if (configuration.getClass().equals(PLConfiguration.class)) {
             PLConfiguration conf = (PLConfiguration) configuration;
-            if (conf.hasCacheDisjointTrueClasses()) {
-                this.cacheDisjointsTrueBetweenClasses = true;
-                trueDisjointsCache = new SoftReferenceCache(4096);
-            }
-            if (conf.hasCacheDisjointFalseClasses()) {
-                this.cacheDisjointsFalseBetweenClasses = true;
-                falseDisjointsCache = new SoftReferenceCache(4096);
-            }
             this.fullTreeCache = conf.hasCacheFullConcept();
             this.fullIntervalSafeCache = conf.hasCacheFullConceptIntervalSafe();
             this.simpleTreeCache = conf.hasCacheSimpleConcept();
@@ -141,8 +116,6 @@ public class PLReasoner implements OWLReasoner {
             this.simpleIntervalSafeCache = PLConfiguration.DEFAULT_SIMPLE_INTERVAL_SAFE_CACHE;
             this.normalizeSuperClassConcept = PLConfiguration.DEFAULT_NORMALIZE_SUPER_CLASS_CONCEPT;
         }
-
-//        ((ClassHierarchyInOntology) classHierarchy).printInfo();
     }
 
     public PLReasoner(OWLOntology rootOntology, OWLReasonerConfiguration configuration,
@@ -150,8 +123,8 @@ public class PLReasoner implements OWLReasoner {
         this(rootOntology,
                 configuration,
                 bufferingMode,
-                new PolicyCacheInMemory<OWLClassExpression>(8192),
-                new IntervalSafePoliciesCacheInMemory<OWLClassExpression, OWLClassExpression>(8192));
+                new PolicyCacheInMemory<>(8192),
+                new IntervalSafePoliciesCacheInMemory<>(8192));
     }
 
     /**
@@ -161,25 +134,6 @@ public class PLReasoner implements OWLReasoner {
         this.classHierarchy.compute();
         this.dataPropertyHierarchy.compute();
         this.objectPropertyHierarchy.compute();
-    }
-
-    /**
-     * Enable or disable the in memory cache.
-     *
-     * @param treeCache
-     * @param intervalSafety
-     * @deprecated This method is no longer used from newer verswion.
-     * <p>
-     * Use
-     * {@link PLReasoner #setFullConceptCache(boolean treeCache, boolean intervalSafety)}
-     * and use
-     * {@link PLReasoner #setSimpleConceptCache(boolean treeCache, boolean intervalSafety)}
-     * instead.
-     */
-    @Deprecated
-    public final void setCache(boolean treeCache, boolean intervalSafety) {
-        setFullConceptCache(treeCache, intervalSafety);
-        setSimpleConceptCache(treeCache, intervalSafety);
     }
 
     /**
@@ -228,38 +182,6 @@ public class PLReasoner implements OWLReasoner {
     }
 
     /**
-     * @return true if in memory caching of full tree parsing is enable, false
-     * otherwise
-     */
-    public boolean isFullCacheEnabled() {
-        return this.fullTreeCache;
-    }
-
-    /**
-     * @return true if in memory caching of full interval safety is enable,
-     * false otherwise
-     */
-    public boolean isFullIntervalSafeCacheEnabled() {
-        return this.fullIntervalSafeCache;
-    }
-
-    /**
-     * @return true if in memory caching of simple tree parsing is enable, false
-     * otherwise
-     */
-    public boolean isSimpleCacheEnabled() {
-        return this.simpleTreeCache;
-    }
-
-    /**
-     * @return true if in memory caching of simple interval safety is enable,
-     * false otherwise
-     */
-    public boolean isSimpleIntervalSafeCacheEnabled() {
-        return this.simpleIntervalSafeCache;
-    }
-
-    /**
      * Return the OWLDataFactory
      *
      * @return OWLDataFactory
@@ -299,19 +221,6 @@ public class PLReasoner implements OWLReasoner {
     }
 
     /**
-     * Check if expression specified is a Policy Logic expression
-     *
-     * @param ce OWLClassExpression
-     * @return true or false
-     */
-    public boolean PLChecking(OWLClassExpression ce) {
-        return (ce instanceof OWLClass || ce instanceof OWLDataSomeValuesFrom
-                || ce instanceof OWLObjectSomeValuesFrom
-                || ce instanceof OWLObjectUnionOf
-                || ce instanceof OWLObjectIntersectionOf);
-    }
-
-    /**
      * Build a ANDNODE tree parsing the concept specified
      *
      * @param inputG OWLClassExpression of the concept specified
@@ -323,58 +232,47 @@ public class PLReasoner implements OWLReasoner {
         ANDNODE root = new ANDNODE();
         for (OWLClassExpression conjunct : inputG.asConjunctSet()) {
             switch (conjunct.getClassExpressionType()) {
-                case OBJECT_ONE_OF:
+                case OBJECT_ONE_OF -> {
                     OWLObjectOneOf x = (OWLObjectOneOf) conjunct;
                     OWLIndividual i = x.getOperandsAsList().get(0);
                     root.addIndividualName(i);
-                    break;
-                case OWL_CLASS:
-                    root.addConceptName(conjunct.asOWLClass());
-                    break;
-                case DATA_SOME_VALUES_FROM:
+                }
+                case OWL_CLASS -> root.addConceptName(conjunct.asOWLClass());
+                case DATA_SOME_VALUES_FROM -> {
                     int minCard = 0;
                     int maxCard = Integer.MAX_VALUE;
                     OWLDataSomeValuesFrom dataConstraint = (OWLDataSomeValuesFrom) conjunct;
                     OWLDataProperty p = dataConstraint.getProperty().asOWLDataProperty();     //data constraint
                     OWLDatatypeRestriction restriction = (OWLDatatypeRestriction) dataConstraint.getFiller();
-                    for (OWLFacetRestriction facetRestrinction : restriction.facetRestrictionsAsList()) {
-                        OWLFacet facet = facetRestrinction.getFacet();
+                    for (OWLFacetRestriction facetRestriction : restriction.facetRestrictionsAsList()) {
+                        OWLFacet facet = facetRestriction.getFacet();
                         switch (facet) {
-                            case MIN_INCLUSIVE:
-                                minCard = facetRestrinction.getFacetValue().parseInteger();
-                                break;
-                            case MAX_INCLUSIVE:
-                                maxCard = facetRestrinction.getFacetValue().parseInteger();
-                                break;
-                            case MIN_EXCLUSIVE:
-                                minCard = facetRestrinction.getFacetValue().parseInteger() + 1;
-                                break;
-                            case MAX_EXCLUSIVE:
-                                maxCard = facetRestrinction.getFacetValue().parseInteger() - 1;
-                                break;
-                            default:
-                                throw new IllegalPolicyLogicExpressionException("Facet type non allowed:" + facet + "\nType found: " + conjunct.getNNF());
+                            case MIN_INCLUSIVE -> minCard = facetRestriction.getFacetValue().parseInteger();
+                            case MAX_INCLUSIVE -> maxCard = facetRestriction.getFacetValue().parseInteger();
+                            case MIN_EXCLUSIVE -> minCard = facetRestriction.getFacetValue().parseInteger() + 1;
+                            case MAX_EXCLUSIVE -> maxCard = facetRestriction.getFacetValue().parseInteger() - 1;
+                            default ->
+                                    throw new IllegalPolicyLogicExpressionException("Facet type non allowed:" + facet + "\nType found: " + conjunct.getNNF());
                         }
                     }
                     root.addDataProperty(p, new IntRange(minCard, maxCard));
-                    break;
-                case OBJECT_SOME_VALUES_FROM:
+                }
+                case OBJECT_SOME_VALUES_FROM -> {
                     OWLObjectSomeValuesFrom existential = (OWLObjectSomeValuesFrom) conjunct;
                     OWLClassExpression fillerC = existential.getFiller();
                     ANDNODE child = buildTree(fillerC);
                     root.addChild(existential, child);
-                    break;
-                case OBJECT_UNION_OF:
-                    Set<OWLClassExpression> disjuncts = conjunct.asDisjunctSet();
-                    Deque<ANDNODE> nodes = new ArrayDeque<>(disjuncts.size());
-                    for (OWLClassExpression disjunct : disjuncts) {
-                        ANDNODE node = buildTree(disjunct);
+                }
+                case OBJECT_UNION_OF -> {
+                    Set<OWLClassExpression> disjunctive = conjunct.asDisjunctSet();
+                    Deque<ANDNODE> nodes = new ArrayDeque<>(disjunctive.size());
+                    for (OWLClassExpression expression : disjunctive) {
+                        ANDNODE node = buildTree(expression);
                         nodes.add(node);
                     }
                     root.addDisjuncts(nodes);
-                    break;
-                default:
-                    throw new IllegalPolicyLogicExpressionException("Type found: " + conjunct.getNNF());
+                }
+                default -> throw new IllegalPolicyLogicExpressionException("Type found: " + conjunct.getNNF());
             }
         }
         return root;
@@ -396,8 +294,8 @@ public class PLReasoner implements OWLReasoner {
                 ORNODE orNode = rootOrNodes.pollFirst();
                 node = new ORNODE();
                 while (!orNode.isEmpty()) {
-                    for (ANDNODE subDisjunct : normalizeUnion(orNode.pollFirst())) {
-                        node.addTree(subDisjunct);
+                    for (ANDNODE subDisjunction : normalizeUnion(orNode.pollFirst())) {
+                        node.addTree(subDisjunction);
                     }
                 }
                 orNodes.add(node);
@@ -486,7 +384,6 @@ public class PLReasoner implements OWLReasoner {
             }
             combinations = newCombinations;
         }
-        newCombinations = null;
         Collection<ANDNODE> newOrNodes = new ArrayList<>(combinations.size());
         for (Collection<ANDNODE> combination : combinations) {
             newOrNodes.add(mergeANDNODEs(combination));
@@ -534,7 +431,7 @@ public class PLReasoner implements OWLReasoner {
         while (!queueDown.isEmpty()) {
             root = queueDown.pollFirst();
             mergeConstraints(root);
-            mergeExistentials(root);
+            mergeExistential(root);
             for (Map.Entry<OWLObjectProperty, List<ANDNODE>> entry : root.getChildrenEntrySet()) {
                 Set<EntityIntersectionNode<OWLClass>> setRanges = objectPropertyHierarchy.getPropertyRange(entry.getKey());
                 for (ANDNODE child : entry.getValue()) {
@@ -583,8 +480,6 @@ public class PLReasoner implements OWLReasoner {
         }
     }
 
-
-
     /* below is new code wrote by Luca Conte
      *  applyRange
      *  mergeNominalInChildren
@@ -603,10 +498,11 @@ public class PLReasoner implements OWLReasoner {
      * @author Luca Conte
      */
     public void applyRange(@Nonnull ORNODE root) {
-        for (ANDNODE disjunction : root.getDisjuncts()) {
+        for (ANDNODE disjunction : root.getDisjunction()) {
             applyRange(disjunction);
         }
     }
+
     private void applyRange(@Nonnull ANDNODE root) {
         Set<OWLObjectProperty> roles = root.getChildrenKeySet();
         Deque<ORNODE> orNodes = root.getORNodes();
@@ -668,12 +564,8 @@ public class PLReasoner implements OWLReasoner {
         dst.addConceptName(conceptNames);
         dst.addIndividualName(individualNames);
         dst.addORnodes(orNodes);
-        for (OWLDataProperty owlDataProperty : dataProperty.keySet()) {
-            dst.addDataProperty(owlDataProperty, dataProperty.get(owlDataProperty));
-        }
-        for (OWLObjectProperty property : children.keySet()) {
-            dst.addChild(property, children.get(property));
-        }
+        dataProperty.keySet().forEach(owlDataProperty -> dst.addDataProperty(owlDataProperty, dataProperty.get(owlDataProperty)));
+        children.keySet().forEach(property -> dst.addChild(property, children.get(property)));
     }
 
     /**
@@ -691,7 +583,6 @@ public class PLReasoner implements OWLReasoner {
                 isInconsistent = true;    // unique name assumption
                 root.addConceptName(this.bottomEntity);
             } else {
-                // root contains an individual {a}
                 if (!individualNames.isEmpty()) {
                     Iterator<OWLIndividual> iterator = individualNames.iterator();
                     OWLIndividual a = iterator.next();
@@ -705,7 +596,6 @@ public class PLReasoner implements OWLReasoner {
                         return tempNode;
                     }
                 } else {
-                    // root doesn't contain an individual {a}
                     mergeNominalInChildren(root, map);
                 }
             }
@@ -774,24 +664,19 @@ public class PLReasoner implements OWLReasoner {
      * @param visited is a Set of Node just visited
      * @author Luca Conte
      */
-
     private boolean isInconsistency(@Nonnull ANDNODE root, @Nonnull Set<ANDNODE> visited) {
         if (root.containsConceptName(this.bottomEntity)) {
-            System.out.println("..contains bottom");
             return true;
         }
-        ;
         for (List<IntRange> ranges : root.getDataPropertyValuesSet()) {
             for (IntRange range : ranges) {
-                if (range.getMin() > range.getMax()) return true;
+                if (range.min() > range.max()) return true;
             }
         }
         if (hasDisjunction(root.getConceptNames())) {
-            System.out.println("..contains disjunctions");
             return true;
         }
         if (root.getIndividualNames().size() > 1) {
-            System.out.println("..contains different nominal");
             return true;
         }
 
@@ -809,9 +694,8 @@ public class PLReasoner implements OWLReasoner {
         return false;
     }
 
-
-    public ORNODE mergeNominal_Constraint_Functional(ORNODE normalized) {
-        Deque<ANDNODE> trees = normalized.getDisjuncts();
+    public ORNODE mergeNominal(ORNODE normalized) {
+        Deque<ANDNODE> trees = normalized.getDisjunction();
         List<ANDNODE> graphs = new LinkedList<>();
         for (ANDNODE tree : trees) {
             isInconsistent = false;
@@ -841,7 +725,7 @@ public class PLReasoner implements OWLReasoner {
 
     private void mergeSameProperty(ANDNODE node) {
         for (ORNODE orNode : node.getORNodes()) {
-            for (ANDNODE disj : orNode.getDisjuncts()) {
+            for (ANDNODE disj : orNode.getDisjunction()) {
                 mergeSameProperty(disj);
             }
         }
@@ -852,7 +736,7 @@ public class PLReasoner implements OWLReasoner {
             }
             List<ANDNODE> children = node.getChildren(property);
             for (int i = 1; i < children.size(); i++) {
-                copyALL(children.get(i),children.get(0));
+                copyALL(children.get(i), children.get(0));
             }
         }
     }
@@ -864,7 +748,7 @@ public class PLReasoner implements OWLReasoner {
      *
      * @param root ANDNODE root node of a tree
      */
-    protected void mergeExistentials(@Nonnull ANDNODE root) {
+    protected void mergeExistential(@Nonnull ANDNODE root) {
         for (Map.Entry<OWLObjectProperty, List<ANDNODE>> entry : root.getChildrenEntrySet()) {
             OWLObjectProperty property = entry.getKey();
             if (objectPropertyHierarchy.isFunctional(property)) {
@@ -886,11 +770,11 @@ public class PLReasoner implements OWLReasoner {
                 int minCard = 0;
                 int maxCard = Integer.MAX_VALUE;
                 for (IntRange interval : entry.getValue()) {
-                    if (minCard < interval.getMin()) {
-                        minCard = interval.getMin();
+                    if (minCard < interval.min()) {
+                        minCard = interval.min();
                     }
-                    if (maxCard > interval.getMax()) {
-                        maxCard = interval.getMax();
+                    if (maxCard > interval.max()) {
+                        maxCard = interval.max();
                     }
                 }
                 root.makeSingletonDataProperty(property, new IntRange(minCard, maxCard));
@@ -930,7 +814,7 @@ public class PLReasoner implements OWLReasoner {
                 break;
             }
             for (IntRange interval : ranges) {
-                if (interval.getMin() > interval.getMax()) {
+                if (interval.min() > interval.max()) {
                     isBottom = true;
                     break;
                 }
@@ -942,7 +826,7 @@ public class PLReasoner implements OWLReasoner {
         return root;
     }
 
-    public boolean hasDisjunction(final @Nonnull Collection<OWLClass> entitySet) {
+    private boolean hasDisjunction(final @Nonnull Collection<OWLClass> entitySet) {
         if (entitySet.size() <= 1) {
             return false;
         }
@@ -950,15 +834,15 @@ public class PLReasoner implements OWLReasoner {
         final Deque<OWLClass> queue = new ArrayDeque<>(entitySet.size() * 2);
         queue.addAll(entitySet);
         while (!queue.isEmpty()) {
-            OWLClass A = queue.pop();
-            if (!visited.contains(A)) {
-                for (OWLClass B : classHierarchy.getDisjunctNodes(A)) {
+            OWLClass a = queue.pop();
+            if (!visited.contains(a)) {
+                for (OWLClass B : classHierarchy.getDisjunctions(a)) {
                     if (visited.contains(B)) {
                         return true;
                     }
                 }
-                visited.add(A);
-                for (OWLClass y : classHierarchy.getParentNodes(A)) {
+                visited.add(a);
+                for (OWLClass y : classHierarchy.getParentNodes(a)) {
                     if (!y.isOWLThing()) {
                         queue.addLast(y);
                     }
@@ -967,297 +851,6 @@ public class PLReasoner implements OWLReasoner {
         }
         return false;
     }
-
-    /**
-     * @param entity    Concept Name from which to start the dijkstra visit
-     * @param entitySet Concept Names Set of a root node ANDNODE
-     * @return true if exists a disjoint in K between a concept from B and a
-     * concept of CN, false otherwise
-     */
-    public boolean hasDisjunction(final @Nonnull OWLClass entity, final @Nonnull Collection<OWLClass> entitySet) {
-        final Deque<OWLClass> queueUp = new ArrayDeque<>();
-        final Deque<OWLClass> queueDown = new ArrayDeque<>();
-        final Set<OWLClass> alreadyCheckedUP = new HashSet<>();
-        final Set<OWLClass> alreadyCheckedDOWN = new HashSet<>();
-        queueUp.add(entity);
-        while (!queueUp.isEmpty()) {
-            OWLClass u = queueUp.pollFirst();
-            for (OWLClass x : classHierarchy.getDisjunctNodes(u)) {
-                queueDown.add(x);
-                while (!queueDown.isEmpty()) {
-                    OWLClass d = queueDown.pollFirst();
-                    if (entitySet.contains(d)) {
-                        return true;
-                    }
-                    alreadyCheckedDOWN.add(d);
-                    if (!d.isOWLNothing()) {
-                        for (OWLClass y : classHierarchy.getChildNodes(d)) {
-                            if (!y.isOWLNothing() && !alreadyCheckedDOWN.contains(y)) {
-                                queueDown.add(y);
-                            }
-                        }
-                    }
-                }
-            }
-            alreadyCheckedUP.add(u);
-            if (!u.isOWLThing()) {
-                for (OWLClass y : classHierarchy.getParentNodes(u)) {
-                    if (!y.isOWLThing() && !alreadyCheckedUP.contains(y)) {
-                        queueUp.add(y);
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * This version use a cache limited by size.
-     *
-     * @param entity    Concept Name from which to start the dijkstra visit
-     * @param entitySet Concept Names Set of a root node ANDNODE
-     * @return True if exists a disjoint in K between a concept from B and a
-     * concept of CN
-     */
-    public boolean hasDisjunctionNoDagCache(final @Nonnull OWLClass entity, @Nonnull Set<OWLClass> entitySet) {
-        final Deque<OWLClass> queueUp = new ArrayDeque<>();
-        final Deque<OWLClass> queueDown = new ArrayDeque<>();
-        final Set<OWLClass> alreadyCheckedUP = new HashSet<>();
-        final Set<OWLClass> alreadyCheckedDOWN = new HashSet<>();
-        final Deque<OWLClass> superClassesOfEntity = new LinkedList<>();
-        queueUp.add(entity);
-        while (!queueUp.isEmpty()) {
-            OWLClass u = queueUp.pollFirst();
-            if (cacheDisjointsTrueBetweenClasses && !this.trueDisjointsCache.isEmptyIntersection(entitySet, u)) {
-                return true;
-            }
-            superClassesOfEntity.add(u);
-            if (cacheDisjointsFalseBetweenClasses) {
-                entitySet = this.falseDisjointsCache.removeCacheValuesFromSet(entitySet, u);
-            }
-            if (!entitySet.isEmpty()) {
-                for (OWLClass x : classHierarchy.getDisjunctNodes(u)) {
-                    Deque<OWLClass> maybeDisjoints = new LinkedList<>();
-                    queueDown.add(x);
-                    while (!queueDown.isEmpty()) {
-                        OWLClass d = queueDown.pollFirst();
-                        maybeDisjoints.add(d);
-                        if (entitySet.contains(d)) {
-                            if (cacheDisjointsTrueBetweenClasses && !superClassesOfEntity.isEmpty()) {
-                                this.trueDisjointsCache.add(superClassesOfEntity, maybeDisjoints);
-                            }
-                            return true;
-                        }
-                        alreadyCheckedDOWN.add(d);
-                        if (!d.isOWLNothing()) {
-                            for (OWLClass y : classHierarchy.getChildNodes(d)) {
-                                if (!y.isOWLNothing() && !alreadyCheckedDOWN.contains(y)) {
-                                    queueDown.add(y);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            alreadyCheckedUP.add(u);
-            if (!u.isOWLThing()) {
-                for (OWLClass y : classHierarchy.getParentNodes(u)) {
-                    if (!y.isOWLThing() && !alreadyCheckedUP.contains(y)) {
-                        queueUp.add(y);
-                    }
-                }
-            }
-        }
-        if (cacheDisjointsFalseBetweenClasses && !superClassesOfEntity.isEmpty() && !entitySet.isEmpty()) {
-            this.falseDisjointsCache.add(superClassesOfEntity, entitySet);
-        }
-        return false;
-    }
-
-    public boolean hasDisjunctionCache(final @Nonnull OWLClass entity, @Nonnull Set<OWLClass> entitySet) {
-        final Deque<OWLClass> queueUp = new ArrayDeque<>();
-        final Deque<OWLClass> queueDown = new ArrayDeque<>();
-        final Deque<Integer> upCount = new ArrayDeque<>();
-        final Set<OWLClass> alreadyCheckedUP = new HashSet<>();
-        final Set<OWLClass> alreadyCheckedDOWN = new HashSet<>();
-        final Deque<OWLClass> superClassesOfEntity = new LinkedList<>();
-        queueUp.add(entity);
-        boolean up = false, down = false;
-        while (!queueUp.isEmpty()) {
-            OWLClass u = queueUp.pollFirst();
-            if (cacheDisjointsTrueBetweenClasses && !this.trueDisjointsCache.isEmptyIntersection(entitySet, u)) {
-                return true;
-            }
-            up = false;
-            down = false;
-            superClassesOfEntity.add(u);
-            if (cacheDisjointsFalseBetweenClasses) {
-                entitySet = this.falseDisjointsCache.removeCacheValuesFromSet(entitySet, u);
-            }
-            if (!entitySet.isEmpty()) {
-                for (OWLClass x : classHierarchy.getDisjunctNodes(u)) {
-                    down = true;
-                    Deque<OWLClass> maybeDisjoints = new LinkedList<>();
-                    queueDown.add(x);
-                    while (!queueDown.isEmpty()) {
-                        OWLClass d = queueDown.pollFirst();
-                        maybeDisjoints.add(d);
-                        if (entitySet.contains(d)) {
-                            if (cacheDisjointsTrueBetweenClasses) {
-                                this.trueDisjointsCache.add(superClassesOfEntity, maybeDisjoints);
-                            }
-                            return true;
-                        }
-                        alreadyCheckedDOWN.add(d);
-                        if (!d.isOWLNothing()) {
-                            for (OWLClass y : classHierarchy.getChildNodes(d)) {
-                                if (!y.isOWLNothing() && !alreadyCheckedDOWN.contains(y)) {
-                                    queueDown.add(y);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            alreadyCheckedUP.add(u);
-            if (!u.isOWLThing()) {
-                int sizeQueueUp = queueUp.size();
-                for (OWLClass y : classHierarchy.getParentNodes(u)) {
-                    if (!y.isOWLThing() && !alreadyCheckedUP.contains(y)) {
-                        queueUp.add(y);
-                    }
-                }
-                sizeQueueUp = sizeQueueUp - queueUp.size();
-                upCount.add(sizeQueueUp);
-                if (sizeQueueUp > 0) {
-                    up = true;
-                }
-            }
-            if (!up) {
-                if (down && cacheDisjointsFalseBetweenClasses) {
-                    OWLClass last = superClassesOfEntity.removeLast();
-                    this.falseDisjointsCache.add(superClassesOfEntity, entitySet);
-                    superClassesOfEntity.addLast(last);
-                }
-                superClassesOfEntity.poll();
-                if (!upCount.isEmpty()) {
-                    int sizeQueueUp = upCount.poll();
-                    while (!upCount.isEmpty() && sizeQueueUp <= 1) {
-                        superClassesOfEntity.poll();
-                        sizeQueueUp = upCount.poll();
-                    }
-                    if (sizeQueueUp > 1) {
-                        sizeQueueUp--;
-                        upCount.push(sizeQueueUp);
-                    }
-                }
-            }
-        }
-        if (cacheDisjointsFalseBetweenClasses && !superClassesOfEntity.isEmpty()) {
-            this.falseDisjointsCache.add(superClassesOfEntity, entitySet);
-        }
-        return false;
-    }
-
-    /**
-     * Inverse parsing of a Tree.
-     *
-     * @param root ANDNODE root node of a tree
-     * @return OWLClassExpression of the concept's tree
-     */
-    public OWLClassExpression buildConcept(@Nonnull ANDNODE root) {
-        final OWLDatatype dataType = dataFactory.getOWLDatatype(XSDVocabulary.POSITIVE_INTEGER);
-        final Deque<OWLClassExpression> concept = new LinkedList<>(root.getConceptNames());
-        for (OWLDataProperty property : root.getDataPropertyKeySet()) {
-            for (IntRange interval : root.getDataProperty(property)) {
-                List<OWLFacetRestriction> cardinalities = new ArrayList<>(2);
-                cardinalities.add(dataFactory.getOWLFacetRestriction(OWLFacet.MIN_INCLUSIVE, interval.getMin()));
-                cardinalities.add(dataFactory.getOWLFacetRestriction(OWLFacet.MAX_INCLUSIVE, interval.getMax()));
-                OWLDatatypeRestriction restriction = dataFactory.getOWLDatatypeRestriction(dataType, cardinalities);
-                OWLDataSomeValuesFrom constraint = dataFactory.getOWLDataSomeValuesFrom(property, restriction);
-                concept.add(constraint);
-            }
-        }
-        for (OWLObjectProperty property : root.getChildrenKeySet()) {
-            for (ANDNODE child : root.getChildren(property)) {
-                OWLClassExpression ex = dataFactory.getOWLObjectSomeValuesFrom(property, buildConcept(child));
-                concept.add(ex);
-            }
-        }
-        for (ORNODE disjuncts : root.getORNodes()) {
-            Deque<OWLClassExpression> union = new ArrayDeque<>(disjuncts.size());
-            for (ANDNODE node : disjuncts.getDisjuncts()) {
-                union.add(buildConcept(node));
-            }
-            if (union.size() == 1) {
-                concept.add(union.pollFirst());
-            } else {
-                concept.add(dataFactory.getOWLObjectUnionOf(union));
-            }
-        }
-        if (concept.size() == 1) {
-            return concept.pollFirst();
-        } else {
-            return dataFactory.getOWLObjectIntersectionOf(concept);
-        }
-    }
-
-    /**
-     * Inverse parsing of a Trees's Set.
-     *
-     * @param trees ANDNODE set
-     * @return OWLClassExpression as UNION of each tree's concept
-     */
-    public OWLClassExpression buildConcept(final @Nonnull Collection<ANDNODE> trees) {
-        Set<OWLClassExpression> concept = new HashSet<>();
-        for (ANDNODE root : trees) {
-            concept.add(buildConcept(root));
-        }
-        if (concept.size() == 1) {
-            return concept.iterator().next();
-        }
-        return dataFactory.getOWLObjectUnionOf(concept);
-    }
-
-    /**
-     * Inverse parsing of a Trees's Set.
-     *
-     * @param node ORNODE containing a set of trees
-     * @return OWLClassExpression as UNION of each tree's concept
-     */
-    public OWLClassExpression buildConcept(final @Nonnull ORNODE node) {
-        return buildConcept(node.getDisjuncts());
-    }
-
-    /**
-     * Retrieve a set containing each data property's interval specified by the
-     * property
-     *
-     * @param tree     ANDNODE root of the tree to analyze
-     * @param property Data property specified
-     * @return A set of Integer array with size = 2
-     * @throws UnionNotNormalizedException if a tree's node contains a disjunct
-     */
-    protected Deque<IntRange> getIntervalsOfCostraint(@Nonnull ANDNODE tree, final @Nonnull OWLDataProperty property) throws UnionNotNormalizedException {
-        Deque<ANDNODE> queueDown = new LinkedList<>();
-        Deque<IntRange> intervals = new LinkedList<>();
-        queueDown.add(tree);
-        while (!queueDown.isEmpty()) {
-            tree = queueDown.pollFirst();
-            if (tree.hasORNodes()) {
-                throw new UnionNotNormalizedException("Subtree has disjuncts in some nodes. Normalize them in DNF before structural subsumption.");
-            }
-            if (tree.containsDataProperty(property)) {
-                intervals.addAll(tree.getDataProperty(property));
-            }
-            for (List<ANDNODE> trees : tree.getChildrenValuesSet()) {
-                queueDown.addAll(trees);
-            }
-        }
-        return intervals;
-    }
-
-    // fare un check
 
     protected void getAllIntervals(ANDNODE tree, Set<IntRange> intervals) {
         for (OWLDataProperty property : tree.getDataPropertyKeySet()) {
@@ -1279,41 +872,9 @@ public class PLReasoner implements OWLReasoner {
     }
 
     private void getAllIntervals(ORNODE tree, Set<IntRange> intervals) {
-        for (ANDNODE disjunct : tree.getDisjuncts()) {
+        for (ANDNODE disjunct : tree.getDisjunction()) {
             getAllIntervals(disjunct, intervals);
         }
-    }
-    // -----
-
-    /**
-     * Retrieve a set containing each data property's interval specified by the
-     * property
-     *
-     * @param treesD   List of ANDNODE to analyze
-     * @param property Data property specified
-     * @return A set of Integer array with size = 2
-     * @throws UnionNotNormalizedException if a tree's node contains a disjunct
-     */
-    protected Set<IntRange> getIntervalsOfConstraint(final @Nonnull Collection<ANDNODE> treesD,
-                                                    final @Nonnull OWLDataProperty property) throws UnionNotNormalizedException {
-        Set<IntRange> intervals = new HashSet<>(32);
-        for (ANDNODE D : treesD) {
-            Deque<ANDNODE> queueDown = new LinkedList<>();
-            queueDown.add(D);
-            while (!queueDown.isEmpty()) {
-                ANDNODE tree = queueDown.pollFirst();
-                if (tree.hasORNodes()) {
-                    throw new UnionNotNormalizedException("Subtree has disjuncts in some nodes. Normalize them in DNF before structural subsumption.");
-                }
-                if (tree.containsDataProperty(property)) {
-                    intervals.addAll(tree.getDataProperty(property));
-                }
-                for (List<ANDNODE> trees : tree.getChildrenValuesSet()) {
-                    queueDown.addAll(trees);
-                }
-            }
-        }
-        return intervals;
     }
 
     /**
@@ -1325,9 +886,7 @@ public class PLReasoner implements OWLReasoner {
      * @return ORNODE with a tree for each disjunct normalized. It's a copy so
      * the original tree isn't touched
      */
-    public ORNODE normalizeIntervalSafety(final @Nonnull Collection<ANDNODE> cCollection,
-                                          final @Nonnull ORNODE d
-    ) {
+    public ORNODE normalizeIntervalSafety(final @Nonnull Collection<ANDNODE> cCollection, final @Nonnull ORNODE d) {
         final ORNODE disjunctionC = new ORNODE();
         for (ANDNODE C : cCollection) {
             Set<IntRange> intervalsInD = new HashSet<>();
@@ -1339,18 +898,17 @@ public class PLReasoner implements OWLReasoner {
     }
 
 
-    public ORNODE normalizeIntervalSafety(final @Nonnull ANDNODE c,
-                                        final @Nonnull SignedPolicy<ANDNODE>[] history
-    ) {
+    public ORNODE normalizeIntervalSafety(final @Nonnull ANDNODE c,final @Nonnull SignedPolicy<ANDNODE>[] history) {
         Collection<ANDNODE> left = new HashSet<>();
         left.add(c);
         ORNODE right = new ORNODE();
         for (SignedPolicy<ANDNODE> signedPolicy : history) {
             right.add(signedPolicy.data());
         }
-        return normalizeIntervalSafety(left,right);
+        return normalizeIntervalSafety(left, right);
 
     }
+
     public ORNODE normalizeIntervalSafetyCache(final @Nonnull Collection<ANDNODE> treesC, final @Nonnull ORNODE treesD) {
         final ORNODE disjunctOfC = new ORNODE();
         final WrapperBoolean wrapper = new WrapperBoolean(false);
@@ -1365,7 +923,7 @@ public class PLReasoner implements OWLReasoner {
                 ANDNODE cCopy = applyIntervalSafe(C.copy(), intervalsInD);
                 if (wrapper.getValue()) {
                     ORNODE disjunction = normalizeUnion(cCopy);
-                    disjunctOfC.addTrees(disjunction.getDisjuncts());
+                    disjunctOfC.addTrees(disjunction.getDisjunction());
                     this.simpleConceptIntervalSafeCache.put(C, treesD, disjunction);
                 } else {
                     disjunctOfC.addTree(cCopy);
@@ -1378,14 +936,12 @@ public class PLReasoner implements OWLReasoner {
         return disjunctOfC;
     }
 
-    private ANDNODE applyIntervalSafe(final @Nonnull ANDNODE treeC,
-                                        final @Nonnull Set<IntRange> intervalsInD)
-            throws UnionNotNormalizedException {
+    private ANDNODE applyIntervalSafe(final @Nonnull ANDNODE treeC,final @Nonnull Set<IntRange> intervalsInD) throws UnionNotNormalizedException {
         if (treeC.hasORNodes()) {
             Deque<ORNODE> temp = new ArrayDeque<>();
             for (ORNODE orNode : treeC.getORNodes()) {
                 ORNODE newORnode = new ORNODE();
-                for (ANDNODE disjunct : orNode.getDisjuncts()) {
+                for (ANDNODE disjunct : orNode.getDisjunction()) {
                     ANDNODE applied = applyIntervalSafe(disjunct, intervalsInD);
                     newORnode.add(applied);
                 }
@@ -1401,17 +957,12 @@ public class PLReasoner implements OWLReasoner {
             for (Iterator<Map.Entry<OWLDataProperty, List<IntRange>>> propertyIterator = tree.getDataPropertyEntrySet().iterator(); propertyIterator.hasNext(); ) {
                 Map.Entry<OWLDataProperty, List<IntRange>> entry = propertyIterator.next();
                 OWLDataProperty property = entry.getKey();
-//                Set<IntRange> intervalsInD                          // qui inserire tutti gli intervalli contenuti nella storia
-                //                       = propertiesInD
-                //                       .computeIfAbsent(property, p -> getIntervalsOfCostraint(treesD, p));
-
-
                 if (!intervalsInD.isEmpty()) {
                     final int extremesSize = intervalsInD.size() * 2 + 2;
                     for (ListIterator<IntRange> intervalInCiterator = entry.getValue().listIterator(); intervalInCiterator.hasNext(); ) {
                         IntRange intervalC = intervalInCiterator.next();
-                        final int min = intervalC.getMin();
-                        final int max = intervalC.getMax();
+                        final int min = intervalC.min();
+                        final int max = intervalC.max();
                         final Set<Integer> left = new HashSet<>(extremesSize);
                         final Set<Integer> right = new HashSet<>(extremesSize);
                         final Set<Integer> extremesSet = new HashSet<>(extremesSize);
@@ -1420,8 +971,8 @@ public class PLReasoner implements OWLReasoner {
                         extremesSet.add(min);
                         extremesSet.add(max);
                         for (IntRange intervalD : intervalsInD) {
-                            int minD = intervalD.getMin();
-                            int maxD = intervalD.getMax();
+                            int minD = intervalD.min();
+                            int maxD = intervalD.max();
                             if (minD >= min && minD <= max) {
                                 left.add(minD);
                                 extremesSet.add(minD);
@@ -1486,17 +1037,17 @@ public class PLReasoner implements OWLReasoner {
     /**
      * Check if a class A is subclass of another class B
      *
-     * @param A First class, it rapresents the child
-     * @param B Second Class, it rapresents the parent
+     * @param a First class, it rapresents the child
+     * @param b Second Class, it rapresents the parent
      * @return true if A is a subclass of B, false otherwise
      */
-    private boolean isSubClassOf(@Nonnull OWLClass A, @Nonnull OWLClass B) {
-        if (A.equals(B)) {
+    private boolean isSubClassOf(@Nonnull OWLClass a, @Nonnull OWLClass b) {
+        if (a.equals(b)) {
             return true;
         }
         final Set<OWLClass> visited = new HashSet<>(512);
         final Deque<OWLClass> queueUp = new ArrayDeque<>(512);
-        queueUp.add(A);
+        queueUp.add(a);
         while (!queueUp.isEmpty()) {
             OWLClass u = queueUp.pollFirst();
             Iterable<OWLClass> parents = null;
@@ -1506,7 +1057,7 @@ public class PLReasoner implements OWLReasoner {
                 parents = classHierarchy.getTopNode();
             }
             for (OWLClass parent : parents) {
-                if (parent.equals(B)) {
+                if (parent.equals(b)) {
                     return true;
                 }
                 if (!parent.isOWLThing() && !visited.contains(parent)) {
@@ -1521,16 +1072,16 @@ public class PLReasoner implements OWLReasoner {
     /**
      * Check if the tree C is subsumed by the tree D. STS algorithm
      *
-     * @param C      Simple PL Concept to check respect to treesD
-     * @param treesD Full PL Concept, it rapresents the consent policy
+     * @param c Simple PL Concept to check respect to treesD
+     * @param d Full PL Concept, it rapresents the consent policy
      * @return true if C is subsumed by D, false otherwise
      * @throws UnionNotNormalizedException if a tree's node contains a disjunct
      */
-    private boolean structuralSubsumption(@Nonnull ANDNODE C, @Nonnull ORNODE treesD) throws UnionNotNormalizedException {
+    private boolean structuralSubsumption(@Nonnull ANDNODE c, @Nonnull ORNODE d) throws UnionNotNormalizedException {
         boolean result = false;
-        for (ANDNODE D : treesD) {
+        for (ANDNODE D : d) {
             checkIfInterrupted();
-            result = structuralSubsumption(C, D);
+            result = structuralSubsumption(c, D);
             if (result) {
                 break;
             }
@@ -1541,15 +1092,15 @@ public class PLReasoner implements OWLReasoner {
     /**
      * Check if the tree C is subsumed by the tree D. STS algorithm
      *
-     * @param disjunctOfC Full PL Concept
-     * @param treesD      Full PL Concept
+     * @param c Full PL Concept
+     * @param d Full PL Concept
      * @return true if C is subsumed by D, false otherwise
      * @throws UnionNotNormalizedException if a tree's node contains a disjunct
      */
-    public boolean structuralSubsumption(@Nonnull ORNODE disjunctOfC, @Nonnull ORNODE treesD) throws UnionNotNormalizedException {
+    public boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull ORNODE d) throws UnionNotNormalizedException {
         boolean result = true;
-        for (ANDNODE C : disjunctOfC) {
-            result = structuralSubsumption(C, treesD);
+        for (ANDNODE C : c) {
+            result = structuralSubsumption(C, d);
             if (!result) {
                 break;
             }
@@ -1560,35 +1111,33 @@ public class PLReasoner implements OWLReasoner {
     /**
      * Check if the tree C is subsumed by the tree D. STS algorithm
      *
-     * @param C Simple PL Concept
-     * @param D Simple PL Concept
+     * @param c Simple PL Concept
+     * @param d Simple PL Concept
      * @return true if C is subsumed by D, false otherwise
      * @throws UnionNotNormalizedException if a tree's node contains a disjunct
      */
-    private boolean structuralSubsumption(@Nonnull ANDNODE C, @Nonnull ANDNODE D) throws UnionNotNormalizedException {
+    private boolean structuralSubsumption(@Nonnull ANDNODE c, @Nonnull ANDNODE d) throws UnionNotNormalizedException {
         this.stsCount++;
-        if (C.hasORNodes()) {
+        if (c.hasORNodes()) {
             throw new UnionNotNormalizedException("Subtree at left has disjuncts in some nodes. Normalize them before structural subsumption.");
-        } else if (D.hasORNodes()) {
+        } else if (d.hasORNodes()) {
             throw new UnionNotNormalizedException("Subtree at right has disjuncts in some nodes. Normalize them before structural subsumption.");
         }
-        if (C.containsConceptName(this.bottomEntity)) {
+        if (c.containsConceptName(this.bottomEntity)) {
             return true;
         }
         boolean isSubsumpted = true;
 
+        Set<OWLIndividual> individualNamesController = c.getIndividualNames();
+        Set<OWLIndividual> individualNamesSubjects = d.getIndividualNames();
 
-        Set<OWLIndividual> individualNamesController = C.getIndividualNames();
-        Set<OWLIndividual> individualNamesSubjects = D.getIndividualNames();
-
-
-        for (OWLClass B : D.getConceptNames()) {
+        for (OWLClass B : d.getConceptNames()) {
             if (!isSubsumpted) {
                 break;
             }
 
             isSubsumpted = false;
-            for (OWLClass A : C.getConceptNames()) {
+            for (OWLClass A : c.getConceptNames()) {
                 if (isSubClassOf(A, B)) {
                     isSubsumpted = true;
                     break;
@@ -1602,17 +1151,12 @@ public class PLReasoner implements OWLReasoner {
                 }
             }
         }
-
-        /*se vi è un nominal in D che non è in C nella stessa posizione allora ritorna falso */
         for (OWLIndividual individual_D : individualNamesSubjects) {
             if (!individualNamesController.contains(individual_D)) {
-//                System.out.println(" vi è un nominal in D che non è in C nella stessa posizione allora ritorna falso ");
                 return false;
             }
         }
-
-
-        for (Map.Entry<OWLDataProperty, List<IntRange>> constraint : D.getDataPropertyEntrySet()) {
+        for (Map.Entry<OWLDataProperty, List<IntRange>> constraint : d.getDataPropertyEntrySet()) {
             if (!isSubsumpted) {
                 break;
             }
@@ -1622,16 +1166,15 @@ public class PLReasoner implements OWLReasoner {
                     break;
                 }
                 isSubsumpted = false;
-                for (IntRange intervalC : C.getDataProperty(property)) {
-                    if (intervalC.isIncluseIn(intervalD)) {
+                for (IntRange intervalC : c.getDataProperty(property)) {
+                    if (intervalC.isInclusion(intervalD)) {
                         isSubsumpted = true;
                         break;
                     }
                 }
             }
         }
-
-        for (Map.Entry<OWLObjectProperty, List<ANDNODE>> child : D.getChildrenEntrySet()) {
+        for (Map.Entry<OWLObjectProperty, List<ANDNODE>> child : d.getChildrenEntrySet()) {
             if (!isSubsumpted) {
                 break;
             }
@@ -1641,7 +1184,7 @@ public class PLReasoner implements OWLReasoner {
                     break;
                 }
                 isSubsumpted = false;
-                for (ANDNODE childC : C.getChildren(property)) {
+                for (ANDNODE childC : c.getChildren(property)) {
                     isSubsumpted = structuralSubsumption(childC, childD);
                     if (isSubsumpted) {
                         break;
@@ -1651,21 +1194,16 @@ public class PLReasoner implements OWLReasoner {
         }
         return isSubsumpted;
     }
-
-    public int getStsCount() {
-        return this.stsCount;
-    }
-
-    public boolean isEntailed(@Nonnull  PolicyLogic<OWLClassExpression> c, @Nonnull SignedPolicy<ANDNODE>[] history){
+    public boolean isEntailed(@Nonnull PolicyLogic<OWLClassExpression> c, @Nonnull SignedPolicy<ANDNODE>[] history) {
         this.stsCount = 0;
         ANDNODE buildTree = this.buildTree(c.expression());
         //apply interval safe C,H
         ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(buildTree, history);
-        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjuncts().getFirst());
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
         this.applyRange(normalizedUnion);
-        ORNODE merged = this.mergeNominal_Constraint_Functional(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged,history);
+        return structuralSubsumption(merged, history);
     }
     private boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull ANDNODE signedPolicy) {
         boolean result = true;
@@ -1680,8 +1218,8 @@ public class PLReasoner implements OWLReasoner {
     private boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull SignedPolicy<ANDNODE>[] history) {
         boolean result;
         for (ANDNODE andnode : c) {
-            result = structuralSubsumption(andnode,history);
-            if(!result){
+            result = structuralSubsumption(andnode, history);
+            if (!result) {
                 return false;
             }
         }
@@ -1708,10 +1246,10 @@ public class PLReasoner implements OWLReasoner {
         for (int i = k + 1; i < history.length; i++) {              // itera sulle deny
             int j;
 
-            ANDNODE cANDci = this.createIntersectionOf(c,history[i].data());
+            ANDNODE cANDci = this.createIntersectionOf(c, history[i].data());
             mergeSameProperty(cANDci);
             ORNODE normalizedUnion = this.normalizeUnion(cANDci);
-            ORNODE merged = this.mergeNominal_Constraint_Functional(normalizedUnion);
+            ORNODE merged = this.mergeNominal(normalizedUnion);
 
 
             if (!history[i].permit() && !structuralSubsumption(merged, bottom)) {
@@ -1728,7 +1266,6 @@ public class PLReasoner implements OWLReasoner {
         }
         return true;
     }
-
     private boolean isInstanceOf(OWLIndividual individual, OWLClass owlClass) {
         Stream<OWLClassAssertionAxiom> assertionAxiomStream = rootOntology.logicalAxioms()
                 .filter(OWLClassAssertionAxiom.class::isInstance)
@@ -1744,7 +1281,6 @@ public class PLReasoner implements OWLReasoner {
         }
         return false;
     }
-
 
     /**
      * Take an OWLClassExpression to normalize and build a tree
@@ -1784,7 +1320,6 @@ public class PLReasoner implements OWLReasoner {
         while (!trees.isEmpty()) {
             ANDNODE tree = trees.pollFirst();
             ORNODE normalized = this.simpleConceptCache.get(tree);
-//            querySimpleCache++;
             if (normalized == null) {
                 ANDNODE keyCache = tree.copy();
                 wrapper.setValue(false);
@@ -1805,7 +1340,6 @@ public class PLReasoner implements OWLReasoner {
                     this.simpleConceptCache.put(keyCache, tree);
                 }
             } else {
-//                foundSimpleCache++;
                 for (ANDNODE treeNormalized : normalized) {
                     results.addTree(treeNormalized);
                 }
@@ -1855,32 +1389,6 @@ public class PLReasoner implements OWLReasoner {
     }
 
     /**
-     * Check if a OWLClassExpression is already preprocessed and in cache,
-     *
-     * @param ce Policy to check
-     * @return true if preprocessed, otherwise false
-     */
-    public boolean isPreprocessed(@Nonnull OWLClassExpression ce) {
-        return this.fullTreeCache && fullSubClassConceptCache.containsKey(ce);
-    }
-
-    /**
-     * Check if a OWLAxiom is already preprocessed and in cache,
-     *
-     * @param axiom Axiom to check
-     * @return true if preprocessed, otherwise false
-     */
-    public boolean isPreprocessed(@Nonnull OWLAxiom axiom) {
-        if (!this.fullIntervalSafeCache || !(axiom instanceof OWLSubClassOfAxiom)) {
-            return false;
-        }
-        OWLSubClassOfAxiom subClassOfAxiom = (OWLSubClassOfAxiom) axiom;
-        OWLClassExpression superClass = subClassOfAxiom.getSuperClass();
-        OWLClassExpression subClass = subClassOfAxiom.getSubClass();
-        return fullConceptlIntervalSafeCache.containsKey(subClass, superClass);
-    }
-
-    /**
      * Preprocess a concept OWLClassExpression (a policy) respect to the
      * normalization with seven rules. A concept preprocessed is a tree with
      * ANDNODE and ORNODE as nodes. This method cache the result in memory.
@@ -1889,7 +1397,6 @@ public class PLReasoner implements OWLReasoner {
      */
     public void preProcess(@Nonnull OWLClassExpression ce) {
         if (this.fullTreeCache) {
-//            checkEntityInClassificationGraph(ce);
             ORNODE treesNormalized = fullSubClassConceptCache.get(ce);
             if (treesNormalized == null) {
                 if (this.simpleTreeCache) {
@@ -1930,8 +1437,6 @@ public class PLReasoner implements OWLReasoner {
             classification graph.
             If not, then this adds to the DAG
              */
-//            checkEntityInClassificationGraph(superClass);
-//            checkEntityInClassificationGraph(subClass);
             ORNODE treesC = fullSubClassConceptCache.get(subClass);
             if (treesC == null) {
                 if (this.simpleTreeCache) {
@@ -1990,7 +1495,6 @@ public class PLReasoner implements OWLReasoner {
     public boolean isSatisfiable(@Nonnull OWLClassExpression ce) {
         Timer timer = new Timer(this.getTimeOut());
         ORNODE treesNormalized = null;
-//        checkEntityInClassificationGraph(ce);
         if (this.fullTreeCache) {
             treesNormalized = fullSubClassConceptCache.computeIfAbsent(ce, k -> normalizeSatisfiability(ce));
         } else {
@@ -2011,7 +1515,6 @@ public class PLReasoner implements OWLReasoner {
         Timer timer = new Timer(this.getTimeOut());
         Collection<OWLClass> queue = axiom.classesInSignature().collect(Collectors.toCollection(LinkedList::new));
         for (OWLClass clazz : queue) {
-//            checkEntityInClassificationGraph(clazz);
             NodeSet<OWLClass> disjoints = getDisjointClasses(clazz);
             for (OWLClass cl : queue) {
                 if (cl.equals(clazz)) {
@@ -2034,7 +1537,6 @@ public class PLReasoner implements OWLReasoner {
         boolean result = false;
         Timer timer = new Timer(this.getTimeOut());
         for (OWLObjectProperty property : axiom.objectPropertiesInSignature().collect(Collectors.toCollection(LinkedList::new))) {
-//            checkEntityInClassificationGraph(property);
             result = this.objectPropertyHierarchy.isFunctional(property);
             if (!result) {
                 break;
@@ -2048,7 +1550,6 @@ public class PLReasoner implements OWLReasoner {
         boolean result = false;
         Timer timer = new Timer(this.getTimeOut());
         for (OWLDataProperty property : axiom.dataPropertiesInSignature().collect(Collectors.toCollection(LinkedList::new))) {
-//            checkEntityInClassificationGraph(property);
             result = this.dataPropertyHierarchy.isFunctional(property);
             if (!result) {
                 break;
@@ -2062,8 +1563,6 @@ public class PLReasoner implements OWLReasoner {
         boolean result = false;
         Timer timer = new Timer(this.getTimeOut());
         OWLObjectPropertyExpression property = axiom.getProperty();
-//        checkEntityInClassificationGraph(property.asOWLObjectProperty());
-
         Set<OWLClassExpression> supposedRanges = axiom.getRange().asDisjunctSet();
         NodeSet<OWLClass> ranges = getObjectPropertyRanges(property);
         for (OWLClassExpression ce : supposedRanges) {
@@ -2078,6 +1577,9 @@ public class PLReasoner implements OWLReasoner {
         }
         return result;
     }
+    public int getStsCount() {
+        return this.stsCount;
+    }
 
     public boolean isEntailed(@Nonnull OWLSubClassOfAxiom axiom) {
         final Timer timer = new Timer(this.getTimeOut());
@@ -2090,7 +1592,9 @@ public class PLReasoner implements OWLReasoner {
             If not, then this adds to the DAG
          */
 
-        ORNODE treesC, treesD, disjunctOfC;
+        ORNODE treesC;
+        ORNODE treesD;
+        ORNODE disjunctOfC;
         /* SubClass Expression - C - Business Policy */
         if (this.fullTreeCache && this.simpleTreeCache) {
             treesC = fullSubClassConceptCache.computeIfAbsent(subClass, k -> normalizeSatisfiabilityCache(subClass));
@@ -2138,51 +1642,9 @@ public class PLReasoner implements OWLReasoner {
                 disjunctOfC = normalizeIntervalSafety(treesC, treesD);
             }
         }
-        treesC = null;
         checkIfInterrupted();
         timer.checkTime();
         return structuralSubsumption(disjunctOfC, treesD);
-    }
-
-    public boolean isEntailed(@Nonnull OWLClassExpression C, @Nonnull OWLClassExpression D) {
-        return isEntailed(dataFactory.getOWLSubClassOfAxiom(C, D));
-    }
-
-    public boolean isEntailed(@Nonnull OWLClassExpression C, SignedPolicy<OWLClassExpression>[] history) {
-
-
-        if (this.isEntailed(C, this.bottomEntity)) {
-            return true;
-        }
-
-        int k = history.length;
-
-        do {
-            k--;
-        } while (k >= 0 && (!history[k].permit()
-                || !isEntailed(C, history[k].data()))
-        );
-        System.out.println("K is " + k);
-        if (k < 0) return false;
-
-        for (int i = k + 1; i < history.length; i++) {
-            int j;
-
-
-            OWLObjectIntersectionOf cANDci = dataFactory.getOWLObjectIntersectionOf(C, history[i].data());
-
-            if (!history[i].permit() && !isEntailed(cANDci, this.bottomEntity)) {
-                j = i + 1;
-                while (j < history.length &&
-                        (!history[j].permit()
-                                || isEntailed(cANDci, history[j].data()))) {
-                    j++;
-                }
-                if (j >= history.length) return false;
-            }
-        }
-        return true;
-
     }
 
     /**
@@ -2193,18 +1655,23 @@ public class PLReasoner implements OWLReasoner {
      */
     @Override
     public boolean isEntailed(@Nonnull OWLAxiom axiom) {
-        AxiomType type = axiom.getAxiomType();
+        AxiomType<? extends OWLAxiom> type = axiom.getAxiomType();
         if (type.equals(AxiomType.SUBCLASS_OF)) { //STS
             return isEntailed((OWLSubClassOfAxiom) axiom);
-        } else if (type.equals(AxiomType.DISJOINT_CLASSES)) {
+        }
+        else if (type.equals(AxiomType.DISJOINT_CLASSES)) {
             return isEntailed((OWLDisjointClassesAxiom) axiom);
-        } else if (type.equals(AxiomType.FUNCTIONAL_OBJECT_PROPERTY)) {
+        }
+        else if (type.equals(AxiomType.FUNCTIONAL_OBJECT_PROPERTY)) {
             return isEntailed((OWLFunctionalObjectPropertyAxiom) axiom);
-        } else if (type.equals(AxiomType.FUNCTIONAL_DATA_PROPERTY)) {
+        }
+        else if (type.equals(AxiomType.FUNCTIONAL_DATA_PROPERTY)) {
             return isEntailed((OWLFunctionalDataPropertyAxiom) axiom);
-        } else if (type.equals(AxiomType.OBJECT_PROPERTY_RANGE)) {
+        }
+        else if (type.equals(AxiomType.OBJECT_PROPERTY_RANGE)) {
             return isEntailed((OWLObjectPropertyRangeAxiom) axiom);
-        } else {
+        }
+        else {
             throw new UnsupportedOperationException("Expected to be encoded as one of " + SUPPORTED_AXIOMS.stream()
                     .map(AxiomType::getName).toList());
         }
@@ -2311,11 +1778,12 @@ public class PLReasoner implements OWLReasoner {
 
     @Override
     public boolean isConsistent() {
+        boolean reasonerIsConsistent = false;
         if (this.bufferingMode.equals(BufferingMode.NON_BUFFERING)) {
             this.flush();
         }
-        this.reasonerIsConsistent = true;
-        return this.reasonerIsConsistent;
+        reasonerIsConsistent = true;
+        return reasonerIsConsistent;
     }
 
     @Override
@@ -2352,7 +1820,7 @@ public class PLReasoner implements OWLReasoner {
         OWLClassNodeSet ns = new OWLClassNodeSet();
         if (!ce.isAnonymous()) {
             ns.addAllNodes(
-                    classHierarchy.getDisjunctNodes(ce.asOWLClass(), false, new HashSet<>())
+                    classHierarchy.getDisjunctions(ce.asOWLClass(), false, new HashSet<>())
                             .stream()
                             .map(OWLClassNode::new)
             );
@@ -2362,46 +1830,46 @@ public class PLReasoner implements OWLReasoner {
 
     @Override
     public Node<OWLObjectPropertyExpression> getTopObjectPropertyNode() {
-        throw new UnsupportedOperationException("Not supported.");
+        throw new UnsupportedOperationException("getTopObjectPropertyNode() Not supported.");
     }
 
     @Override
     public Node<OWLObjectPropertyExpression> getBottomObjectPropertyNode() {
-        throw new UnsupportedOperationException("Not supported.");
+        throw new UnsupportedOperationException("getBottomObjectPropertyNode() Not supported.");
     }
 
     @Override
-    public NodeSet<OWLObjectPropertyExpression> getSubObjectProperties(OWLObjectPropertyExpression pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLObjectPropertyExpression> getSubObjectProperties(@Nonnull OWLObjectPropertyExpression pe, boolean direct) {
+        throw new UnsupportedOperationException("getSubObjectProperties(...) Not supported.");
     }
 
     @Override
-    public NodeSet<OWLObjectPropertyExpression> getSuperObjectProperties(OWLObjectPropertyExpression pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLObjectPropertyExpression> getSuperObjectProperties(@Nonnull OWLObjectPropertyExpression pe, boolean direct) {
+        throw new UnsupportedOperationException("getSuperObjectProperties(...) Not supported.");
     }
 
     @Override
-    public Node<OWLObjectPropertyExpression> getEquivalentObjectProperties(OWLObjectPropertyExpression pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public Node<OWLObjectPropertyExpression> getEquivalentObjectProperties(@Nonnull OWLObjectPropertyExpression pe) {
+        throw new UnsupportedOperationException("getEquivalentObjectProperties(...) Not supported.");
     }
 
     @Override
-    public NodeSet<OWLObjectPropertyExpression> getDisjointObjectProperties(OWLObjectPropertyExpression pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLObjectPropertyExpression> getDisjointObjectProperties(@Nonnull OWLObjectPropertyExpression pe) {
+        throw new UnsupportedOperationException("getDisjointObjectProperties(...) Not supported.");
     }
 
     @Override
-    public Node<OWLObjectPropertyExpression> getInverseObjectProperties(OWLObjectPropertyExpression pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public Node<OWLObjectPropertyExpression> getInverseObjectProperties(@Nonnull OWLObjectPropertyExpression pe) {
+        throw new UnsupportedOperationException("getInverseObjectProperties(...) Not supported.");
     }
 
     @Override
-    public NodeSet<OWLClass> getObjectPropertyDomains(OWLObjectPropertyExpression pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLClass> getObjectPropertyDomains(@Nonnull OWLObjectPropertyExpression pe, boolean direct) {
+        throw new UnsupportedOperationException("getObjectPropertyDomains(...) Not supported.");
     }
 
     @Override
-    public NodeSet<OWLClass> getObjectPropertyRanges(OWLObjectPropertyExpression pe, boolean direct) {
+    public NodeSet<OWLClass> getObjectPropertyRanges(@Nonnull OWLObjectPropertyExpression pe, boolean direct) {
         OWLClassNodeSet ns = new OWLClassNodeSet();
         for (EntityIntersectionNode<OWLClass> entityIntersection : objectPropertyHierarchy.getPropertyRange(pe, direct, new HashSet<>())) {
             if (entityIntersection.getSize() <= 1) {
@@ -2418,67 +1886,67 @@ public class PLReasoner implements OWLReasoner {
 
     @Override
     public Node<OWLDataProperty> getTopDataPropertyNode() {
-        throw new UnsupportedOperationException("Not supported.");
+        throw new UnsupportedOperationException("getTopDataPropertyNode(...) Not supported.");
     }
 
     @Override
     public Node<OWLDataProperty> getBottomDataPropertyNode() {
-        throw new UnsupportedOperationException("Not supported.");
+        throw new UnsupportedOperationException("getBottomDataPropertyNode Not supported.");
     }
 
     @Override
-    public NodeSet<OWLDataProperty> getSubDataProperties(OWLDataProperty pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLDataProperty> getSubDataProperties(@Nonnull OWLDataProperty pe, boolean direct) {
+        throw new UnsupportedOperationException("getSubDataProperties Not supported.");
     }
 
     @Override
-    public NodeSet<OWLDataProperty> getSuperDataProperties(OWLDataProperty pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLDataProperty> getSuperDataProperties(@Nonnull OWLDataProperty pe, boolean direct) {
+        throw new UnsupportedOperationException("getSuperDataProperties Not supported.");
     }
 
     @Override
-    public Node<OWLDataProperty> getEquivalentDataProperties(OWLDataProperty pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public Node<OWLDataProperty> getEquivalentDataProperties(@Nonnull OWLDataProperty pe) {
+        throw new UnsupportedOperationException("getEquivalentDataProperties Not supported.");
     }
 
     @Override
-    public NodeSet<OWLDataProperty> getDisjointDataProperties(OWLDataPropertyExpression pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLDataProperty> getDisjointDataProperties(@Nonnull OWLDataPropertyExpression pe) {
+        throw new UnsupportedOperationException("getDisjointDataProperties Not supported.");
     }
 
     @Override
-    public NodeSet<OWLClass> getDataPropertyDomains(OWLDataProperty pe, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLClass> getDataPropertyDomains(@Nonnull OWLDataProperty pe, boolean direct) {
+        throw new UnsupportedOperationException("getDataPropertyDomains Not supported.");
     }
 
     @Override
-    public NodeSet<OWLClass> getTypes(OWLNamedIndividual ind, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLClass> getTypes(@Nonnull OWLNamedIndividual ind, boolean direct) {
+        throw new UnsupportedOperationException("getTypes Not supported.");
     }
 
     @Override
-    public NodeSet<OWLNamedIndividual> getInstances(OWLClassExpression ce, boolean direct) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLNamedIndividual> getInstances(@Nonnull OWLClassExpression ce, boolean direct) {
+        throw new UnsupportedOperationException("getInstances Not supported.");
     }
 
     @Override
-    public NodeSet<OWLNamedIndividual> getObjectPropertyValues(OWLNamedIndividual ind, OWLObjectPropertyExpression pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLNamedIndividual> getObjectPropertyValues(@Nonnull OWLNamedIndividual ind, @Nonnull OWLObjectPropertyExpression pe) {
+        throw new UnsupportedOperationException("getObjectPropertyValues Not supported.");
     }
 
     @Override
-    public Set<OWLLiteral> getDataPropertyValues(OWLNamedIndividual ind, OWLDataProperty pe) {
-        throw new UnsupportedOperationException("Not supported.");
+    public Set<OWLLiteral> getDataPropertyValues(@Nonnull OWLNamedIndividual ind, @Nonnull OWLDataProperty pe) {
+        throw new UnsupportedOperationException("getDataPropertyValues Not supported.");
     }
 
     @Override
-    public Node<OWLNamedIndividual> getSameIndividuals(OWLNamedIndividual ind) {
-        throw new UnsupportedOperationException("Not supported.");
+    public Node<OWLNamedIndividual> getSameIndividuals(@Nonnull OWLNamedIndividual ind) {
+        throw new UnsupportedOperationException("getSameIndividuals Not supported.");
     }
 
     @Override
-    public NodeSet<OWLNamedIndividual> getDifferentIndividuals(OWLNamedIndividual ind) {
-        throw new UnsupportedOperationException("Not supported.");
+    public NodeSet<OWLNamedIndividual> getDifferentIndividuals(@Nonnull OWLNamedIndividual ind) {
+        throw new UnsupportedOperationException("getDifferentIndividuals Not supported.");
     }
 
     @Override
@@ -2549,9 +2017,6 @@ public class PLReasoner implements OWLReasoner {
             this.bottomNode = null;
         }
 
-        protected int getSize() {
-            return this.mapHierarchy.size();
-        }
 
         protected boolean containsEntity(T e) {
             return mapHierarchy.containsKey(e);
@@ -2561,9 +2026,6 @@ public class PLReasoner implements OWLReasoner {
             return this.topNode;
         }
 
-        protected NodeHierarchy<T> getBottomNodeHierarchy() {
-            return this.bottomNode;
-        }
 
         public Node<T> getTopNode() {
             if (topNode != null) {
@@ -2636,19 +2098,6 @@ public class PLReasoner implements OWLReasoner {
             return ns;
         }
 
-        public Set<T> getChildNodes(T parent) {
-            NodeHierarchy<T> nodeHierarchy = mapHierarchy.get(parent);
-            if (nodeHierarchy == null || !nodeHierarchy.hasChildrenNodes()) {
-                return Collections.emptySet();
-            }
-            Set<T> ns = new HashSet<>();
-            for (NodeHierarchy<T> child : nodeHierarchy.getChildrenNodes()) {
-                child.getValue()
-                        .entities()
-                        .forEach(ns::add);
-            }
-            return ns;
-        }
 
         public NodeSet<T> getChildNodes(T parent, boolean direct, DefaultNodeSet<T> ns) {
             NodeHierarchy<T> nodeHierarchy = mapHierarchy.get(parent);
@@ -2693,7 +2142,7 @@ public class PLReasoner implements OWLReasoner {
             return ns;
         }
 
-        public Set<T> getDisjunctNodes(T entity) {
+        public Set<T> getDisjunctions(T entity) {
             Set<T> ns = new HashSet<>();
             NodeHierarchy<T> nodeHierarchy = mapHierarchy.get(entity);
             if (nodeHierarchy == null) {
@@ -2708,7 +2157,7 @@ public class PLReasoner implements OWLReasoner {
             return ns;
         }
 
-        public Set<T> getDisjunctNodes(T entity, boolean direct, Set<T> ns) {
+        public Set<T> getDisjunctions(T entity, boolean direct, Set<T> ns) {
             if (entity.isBottomEntity()) {
                 ns.addAll(mapHierarchy.keySet());
             } else {
@@ -2837,9 +2286,11 @@ public class PLReasoner implements OWLReasoner {
                 }
             }
             if (!directChildrenOfTopNode.isEmpty()) {
+                assert topNode != null;
                 topNode.addChildrenNode(directChildrenOfTopNode);
             }
             if (!directParentsOfBottomNode.isEmpty()) {
+                assert bottomNode != null;
                 bottomNode.addParentsNode(directParentsOfBottomNode);
             }
             checkCycles();
@@ -2909,9 +2360,11 @@ public class PLReasoner implements OWLReasoner {
                     }
                 }
                 if (!mergedNode.hasParentsNodes()) {
+                    assert topNode != null;
                     topNode.addChildNode(mergedNode);
                 }
                 if (!mergedNode.hasChildrenNodes()) {
+                    assert bottomNode != null;
                     bottomNode.addParentNode(mergedNode);
                 }
             }
@@ -3017,7 +2470,7 @@ public class PLReasoner implements OWLReasoner {
                 Deque<NodeHierarchy<OWLDataProperty>> queueDown = new LinkedList<>();
                 queueDown.add(top);
                 while (!queueDown.isEmpty()) {
-                    PropertyNodeHierarchy<OWLDataProperty, OWLClass> node = (PropertyNodeHierarchy) queueDown.pollFirst();
+                    PropertyNodeHierarchy<OWLDataProperty, OWLClass> node = (PropertyNodeHierarchy<OWLDataProperty, OWLClass>) queueDown.pollFirst();
                     for (OWLDataProperty el : node.getValue()) {
                         if (entityInHierarchyReadable.isFunctional(el)) {
                             node.setFunctional(true);
@@ -3184,7 +2637,7 @@ public class PLReasoner implements OWLReasoner {
         }
     }
 
-    private ANDNODE createIntersectionOf(ANDNODE a,ANDNODE b){
+    private ANDNODE createIntersectionOf(ANDNODE a, ANDNODE b) {
         ANDNODE aANDb = a.copy();
         ANDNODE bCopied = b.copy();
         aANDb.addConceptName(bCopied.getConceptNames());
@@ -3193,7 +2646,7 @@ public class PLReasoner implements OWLReasoner {
             aANDb.addDataProperty(dataProperty.getKey(), dataProperty.getValue());
         }
         for (Map.Entry<OWLObjectProperty, List<ANDNODE>> property : bCopied.getChildrenEntrySet()) {
-            aANDb.addChild(property.getKey(),property.getValue());
+            aANDb.addChild(property.getKey(), property.getValue());
         }
         aANDb.addORnodes(bCopied.getORNodes());
         return aANDb;

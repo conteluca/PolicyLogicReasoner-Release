@@ -7,8 +7,8 @@ package special.reasoner.cache;
 
 import java.util.Collection;
 import java.util.function.Function;
-import special.model.ANDNODE;
-import special.model.ORNODE;
+import special.model.tree.ANDNODE;
+import special.model.tree.ORNODE;
 
 /**
  *

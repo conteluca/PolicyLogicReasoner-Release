@@ -1,16 +1,19 @@
-package special.model;
+package special.reasoner.utility;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
-import special.reasoner.translators.OntologyAxioms;
+import special.model.*;
+import special.model.tree.ANDNODE;
+import special.model.tree.IntRange;
+import special.model.tree.ORNODE;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class JSONPolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
+public class PolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
     private final List<PolicyLogic<JSONArray>> policies = new LinkedList<>();
     private final OntologyAxioms ontologyAxioms;
     private final OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
@@ -18,7 +21,7 @@ public class JSONPolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
     private  boolean enableKnowledgeBaseCheck = true;
     private int currentIndex = 0;
 
-    public JSONPolicyIterator(OWLOntology ontology, String path, boolean enableKnowledgeBaseCheck) {
+    public PolicyIterator(OWLOntology ontology, String path, boolean enableKnowledgeBaseCheck) {
         this.enableKnowledgeBaseCheck = enableKnowledgeBaseCheck;
         File directory = new File(path);
         this.ontologyAxioms = new OntologyAxioms(ontology);
@@ -26,20 +29,7 @@ public class JSONPolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
             List<File> jsonFiles = Arrays.stream(Objects.requireNonNull(directory.listFiles())).filter(x -> x.getName().endsWith(".json")).toList();
 
             for (File fi : jsonFiles) {
-                byte[] data = new byte[(int) fi.length()];
-                FileInputStream stream;
-                try {
-                    stream = new FileInputStream(fi);
-                    stream.read(data);
-                    stream.close();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                String policy = new String(data, StandardCharsets.UTF_8);
-                JSONObject dd = new JSONObject(policy);
-                JSONArray objects = (JSONArray) dd.get("@policy_set");
-                String id = fi.getName().substring(0, fi.getName().length() - ".json".length());
-                PolicyLogic<JSONArray> policyLogic = new PolicyLogic<>(id, objects);
+                PolicyLogic<JSONArray> policyLogic = getArrayPolicyLogic(fi);
                 policies.add(policyLogic);
             }
         } else {
@@ -47,6 +37,24 @@ public class JSONPolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
             System.exit(1);
         }
     }
+
+    private static PolicyLogic<JSONArray> getArrayPolicyLogic(File fi) {
+        byte[] data = new byte[(int) fi.length()];
+        FileInputStream stream;
+        try {
+            stream = new FileInputStream(fi);
+            stream.read(data);
+            stream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String policy = new String(data, StandardCharsets.UTF_8);
+        JSONObject dd = new JSONObject(policy);
+        JSONArray objects = (JSONArray) dd.get("@policy_set");
+        String id = fi.getName().substring(0, fi.getName().length() - ".json".length());
+        return new PolicyLogic<>(id, objects);
+    }
+
     @Override
     public boolean hasNext() {
         return currentIndex < policies.size();
@@ -54,6 +62,10 @@ public class JSONPolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
 
     @Override
     public PolicyLogic<JSONArray> next() {
+
+        if(!hasNext()){
+            throw new NoSuchElementException();
+        }
         return policies.get(currentIndex++);
     }
 

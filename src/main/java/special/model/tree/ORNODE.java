@@ -3,11 +3,12 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package special.model;
+package special.model.tree;
 
 import org.semanticweb.owlapi.model.OWLClassExpression;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 
+import javax.annotation.Nonnull;
 import java.io.Serializable;
 import java.util.*;
 
@@ -18,18 +19,18 @@ import java.util.*;
  */
 public class ORNODE implements Iterable<ANDNODE>, Deque<ANDNODE>, Serializable {
 
-    private final Deque<ANDNODE> disjuncts;
+    private final Deque<ANDNODE> disjunction;
 
     @Override
     public String toString() {
-        return " ("+disjuncts.size()+") " + disjuncts + " \n";
+        return " ("+ disjunction.size()+") " + disjunction + " \n";
 
     }
 
     public OWLClassExpression toOWLClassExpression(OWLDataFactory factory){
         Set<OWLClassExpression> classSet = new HashSet<>();
-        for (ANDNODE disjunct : this.disjuncts) {
-            OWLClassExpression owlClassExpression = disjunct.toOWLClassExpression(factory);
+        for (ANDNODE disjunctive : this.disjunction) {
+            OWLClassExpression owlClassExpression = disjunctive.toOWLClassExpression(factory);
             classSet.add(owlClassExpression);
         }
         return factory.getOWLObjectUnionOf(classSet);
@@ -38,34 +39,34 @@ public class ORNODE implements Iterable<ANDNODE>, Deque<ANDNODE>, Serializable {
         StringBuilder main = new StringBuilder("[");
         int ndisj = 0;
         String action;
-        for (ANDNODE disjunction : disjuncts) {
+        for (ANDNODE i : disjunction) {
             if(ndisj%2==0){
                 action = "\n\"@action\":\"permit\",\n";
             }else{
                 action = "\n\"@action\":\"deny\",\n";
             }
-            main.append("{").append(action).append(disjunction.toJson()).append("\n}");
+            main.append("{").append(action).append(i.toJson()).append("\n}");
             ndisj++;
-            if (ndisj<disjuncts.size()){
+            if (ndisj< this.disjunction.size()){
                 main.append(",\n");
             }
         }
        return main.append("]").toString();
     }
     public ORNODE() {
-        this.disjuncts = new LinkedList<>();
+        this.disjunction = new LinkedList<>();
     }
 
     public ORNODE(int size) {
         if (size <= 0) {
             size = 32;
         }
-        this.disjuncts = new ArrayDeque<>(size);
+        this.disjunction = new ArrayDeque<>(size);
     }
 
     public ORNODE(Collection<? extends ANDNODE> nodes) {
         this(nodes.size() + 1);
-        this.disjuncts.addAll(nodes);
+        this.disjunction.addAll(nodes);
     }
 
     @Override
@@ -73,205 +74,203 @@ public class ORNODE implements Iterable<ANDNODE>, Deque<ANDNODE>, Serializable {
         if (o == this) {
             return true;
         }
-        if (!(o instanceof ORNODE)) {
+        if (!(o instanceof ORNODE cc)) {
             return false;
         }
-        ORNODE cc = (ORNODE) o;
-        return cc.disjuncts == null ? this.disjuncts == null : this.disjuncts != null && cc.disjuncts.containsAll(this.disjuncts)
-                && this.disjuncts.containsAll(cc.disjuncts);
+        return cc.disjunction == null ? this.disjunction == null : this.disjunction != null && cc.disjunction.containsAll(this.disjunction)
+                && this.disjunction.containsAll(cc.disjunction);
     }
 
     @Override
     public int hashCode() {
         int hashCode = 1;
-        for(ANDNODE node : this.disjuncts) {
+        for(ANDNODE node : this.disjunction) {
             hashCode += node.hashCode();
         }
         return 53 * 3 + hashCode;
-//        return 53 * 3 + Objects.hashCode(this.disjuncts);
     }
 
     public boolean isEmpty() {
-        return this.disjuncts.isEmpty();
+        return this.disjunction.isEmpty();
     }
 
     public int size() {
-        return this.disjuncts.size();
+        return this.disjunction.size();
     }
 
     public void clear() {
-        this.disjuncts.clear();
+        this.disjunction.clear();
     }
 
-    public Deque<ANDNODE> getDisjuncts() {
-        return this.disjuncts;
+    public Deque<ANDNODE> getDisjunction() {
+        return this.disjunction;
     }
 
     public boolean addTree(ANDNODE tree) {
-        return tree != null && this.disjuncts.add(tree);
+        return tree != null && this.disjunction.add(tree);
     }
 
     public boolean addTrees(Collection<? extends ANDNODE> trees) {
-        return trees != null && this.disjuncts.addAll(trees);
+        return trees != null && this.disjunction.addAll(trees);
     }
 
     @Override
     public Iterator<ANDNODE> iterator() {
-        return this.disjuncts.iterator();
+        return this.disjunction.iterator();
     }
 
     @Override
     public Object[] toArray() {
-        return this.disjuncts.toArray();
+        return this.disjunction.toArray();
     }
 
     @Override
-    public <T> T[] toArray(T[] a) {
-        return this.disjuncts.toArray(a);
+    public <T> T[] toArray(@Nonnull T[] a) {
+        return this.disjunction.toArray(a);
     }
 
     @Override
-    public boolean containsAll(Collection<?> c) {
-        return this.disjuncts.containsAll(c);
+    public boolean containsAll(@Nonnull Collection<?> c) {
+        return this.disjunction.containsAll(c);
     }
 
     @Override
     public boolean addAll(Collection<? extends ANDNODE> c) {
-        return this.disjuncts.addAll(c);
+        return this.disjunction.addAll(c);
     }
 
     @Override
-    public boolean removeAll(Collection<?> c) {
-        return this.disjuncts.removeAll(c);
+    public boolean removeAll(@Nonnull Collection<?> c) {
+        return this.disjunction.removeAll(c);
     }
 
     @Override
-    public boolean retainAll(Collection<?> c) {
-        return this.disjuncts.retainAll(c);
+    public boolean retainAll(@Nonnull Collection<?> c) {
+        return this.disjunction.retainAll(c);
     }
 
     @Override
     public void addFirst(ANDNODE e) {
-        this.disjuncts.addFirst(e);
+        this.disjunction.addFirst(e);
     }
 
     @Override
     public void addLast(ANDNODE e) {
-        this.disjuncts.addLast(e);
+        this.disjunction.addLast(e);
     }
 
     @Override
     public boolean offerFirst(ANDNODE e) {
-        return this.disjuncts.offerFirst(e);
+        return this.disjunction.offerFirst(e);
     }
 
     @Override
     public boolean offerLast(ANDNODE e) {
-        return this.disjuncts.offerLast(e);
+        return this.disjunction.offerLast(e);
     }
 
     @Override
     public ANDNODE removeFirst() {
-        return this.disjuncts.removeFirst();
+        return this.disjunction.removeFirst();
     }
 
     @Override
     public ANDNODE removeLast() {
-        return this.disjuncts.removeLast();
+        return this.disjunction.removeLast();
     }
 
     @Override
     public ANDNODE pollFirst() {
-        return this.disjuncts.pollFirst();
+        return this.disjunction.pollFirst();
     }
 
     @Override
     public ANDNODE pollLast() {
-        return this.disjuncts.pollLast();
+        return this.disjunction.pollLast();
     }
 
     @Override
     public ANDNODE getFirst() {
-        return this.disjuncts.getFirst();
+        return this.disjunction.getFirst();
     }
 
     @Override
     public ANDNODE getLast() {
-        return this.disjuncts.getLast();
+        return this.disjunction.getLast();
     }
 
     @Override
     public ANDNODE peekFirst() {
-        return this.disjuncts.peekFirst();
+        return this.disjunction.peekFirst();
     }
 
     @Override
     public ANDNODE peekLast() {
-        return this.disjuncts.peekLast();
+        return this.disjunction.peekLast();
     }
 
     @Override
     public boolean removeFirstOccurrence(Object o) {
-        return this.disjuncts.removeFirstOccurrence(o);
+        return this.disjunction.removeFirstOccurrence(o);
     }
 
     @Override
     public boolean removeLastOccurrence(Object o) {
-        return this.disjuncts.removeLastOccurrence(o);
+        return this.disjunction.removeLastOccurrence(o);
     }
 
     @Override
     public boolean add(ANDNODE e) {
-        return this.disjuncts.add(e);
+        return this.disjunction.add(e);
     }
 
     @Override
     public boolean offer(ANDNODE e) {
-        return this.disjuncts.offer(e);
+        return this.disjunction.offer(e);
     }
 
     @Override
     public ANDNODE remove() {
-        return this.disjuncts.remove();
+        return this.disjunction.remove();
     }
 
     @Override
     public ANDNODE poll() {
-        return this.disjuncts.poll();
+        return this.disjunction.poll();
     }
 
     @Override
     public ANDNODE element() {
-        return this.disjuncts.element();
+        return this.disjunction.element();
     }
 
     @Override
     public ANDNODE peek() {
-        return this.disjuncts.peek();
+        return this.disjunction.peek();
     }
 
     @Override
     public void push(ANDNODE e) {
-        this.disjuncts.push(e);
+        this.disjunction.push(e);
     }
 
     @Override
     public ANDNODE pop() {
-        return this.disjuncts.pop();
+        return this.disjunction.pop();
     }
 
     @Override
     public boolean remove(Object o) {
-        return this.disjuncts.remove(o);
+        return this.disjunction.remove(o);
     }
 
     @Override
     public boolean contains(Object o) {
-        return this.disjuncts.contains(o);
+        return this.disjunction.contains(o);
     }
 
     @Override
     public Iterator<ANDNODE> descendingIterator() {
-        return this.disjuncts.descendingIterator();
+        return this.disjunction.descendingIterator();
     }
 }

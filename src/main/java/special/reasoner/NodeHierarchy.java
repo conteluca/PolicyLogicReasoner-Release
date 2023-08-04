@@ -14,7 +14,7 @@ import org.semanticweb.owlapi.model.OWLObject;
 import org.semanticweb.owlapi.reasoner.Node;
 
 /**
- * Generic node of concepts's hierarchy
+ * Generic node of concept's hierarchy
  *
  * @author Luca Ioffredo
  * @param <T> Where T is a subclass of OWLObject as OWLClass, OWLObjectPropery and OWLDataProperty

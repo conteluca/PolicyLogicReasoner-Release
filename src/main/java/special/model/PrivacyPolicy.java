@@ -1,6 +1,9 @@
 package special.model;
 
 import org.semanticweb.owlapi.model.OWLClassExpression;
+/**
+ * @author Luca Conte
+ */
 
 public class PrivacyPolicy {
     private final PolicyLogic<OWLClassExpression> policyLogic;
@@ -25,12 +28,8 @@ public class PrivacyPolicy {
         this.isCompliant = compliant;
     }
 
-    public String getPolicyLogic() {
-        return policyLogic.id();
-    }
-
     public String getHistory() {
-        return history.getId();
+        return history.id();
     }
 
     public boolean isCompliant() {
@@ -40,10 +39,6 @@ public class PrivacyPolicy {
     public void setExecutionTime(double time) {
         executionTime[index] = time;
         index++;
-    }
-
-    public double getExecutionTime(int index) {
-        return executionTime[index];
     }
 
     @Override
@@ -56,7 +51,7 @@ public class PrivacyPolicy {
         stringBuilder.append(this.executionTime[ this.executionTime.length - 1]);
         return this.policyLogic.id() +
                 delimiter +
-                this.history.getId() +
+                this.history.id() +
                 delimiter +
                 isCompliant +
                 delimiter +

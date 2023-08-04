@@ -8,8 +8,8 @@ package special.reasoner.cache;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import special.model.ANDNODE;
-import special.model.ORNODE;
+import special.model.tree.ANDNODE;
+import special.model.tree.ORNODE;
 
 /**
  * Cache to save each couple of normalized interval safe policies.A policy
@@ -35,40 +35,40 @@ public class IntervalSafePoliciesCacheInMemory<T1, T2> implements DoubleKeyCache
     }
 
     public boolean put(T1 key1, T2 key2, ANDNODE value) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         ORNODE node = map.computeIfAbsent(key, k -> new ORNODE());
         return node.addTree(value);
     }
 
     public boolean put(T1 key1, T2 key2, Collection<? extends ANDNODE> trees) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         ORNODE node = map.computeIfAbsent(key, k -> new ORNODE());
         return node.addTrees(trees);
     }
 
-    public boolean put(T1 key1, T2 key2, ORNODE disjuncts) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+    public boolean put(T1 key1, T2 key2, ORNODE disjunction) {
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         ORNODE node = map.get(key);
         if (node == null) {
-            map.put(key, disjuncts);
+            map.put(key, disjunction);
             return true;
         } else {
-            return node.addTrees(disjuncts.getDisjuncts());
+            return node.addTrees(disjunction.getDisjunction());
         }
     }
 
     public ORNODE remove(T1 key1, T2 key2) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         return map.remove(key);
     }
 
     public ORNODE get(T1 key1, T2 key2) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         return map.get(key);
     }
 
     public boolean containsKey(T1 key1, T2 key2) {
-        DoubleKey<T1,T2> key = new DoubleKey(key1, key2);
+        DoubleKey<T1,T2> key = new DoubleKey<>(key1, key2);
         return map.containsKey(key);
     }
 
@@ -81,17 +81,8 @@ public class IntervalSafePoliciesCacheInMemory<T1, T2> implements DoubleKeyCache
     }
 
     @Override
-    public void destroy() {
-        this.map.clear();
-    }
-
-    @Override
     public boolean isFull() {
         return false;
     }
 
-    @Override
-    public void close() {
-        clear();
-    }
 }

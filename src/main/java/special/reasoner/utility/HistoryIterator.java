@@ -1,10 +1,13 @@
-package special.model;
+package special.reasoner.utility;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.model.*;
-import special.reasoner.translators.OntologyAxioms;
+import special.model.*;
+import special.model.tree.ANDNODE;
+import special.model.tree.IntRange;
+import special.model.tree.ORNODE;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -13,19 +16,18 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class HistoryPolicyIterator implements Iterator<History> {
+public class HistoryIterator implements Iterator<History> {
     private final List<History> histories = new LinkedList<>();
     private final OntologyAxioms ontologyAxioms;
     private final OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
-    private final OWLDataFactory factory = manager.getOWLDataFactory();
 
     private final boolean enableKnowledgeBaseCheck;
 
     private int currentIndex = 0;
 
-    public HistoryPolicyIterator(final @Nonnull OWLOntology ontology,
-                                 final @Nonnull String historyPathDirectory,
-                                 final @Nonnull boolean enableKnowledgeBaseCheck) {
+    public HistoryIterator(final @Nonnull OWLOntology ontology,
+                           final @Nonnull String historyPathDirectory,
+                           final boolean enableKnowledgeBaseCheck) {
         this.enableKnowledgeBaseCheck = enableKnowledgeBaseCheck;
         File directory = new File(historyPathDirectory);
         this.ontologyAxioms = new OntologyAxioms(ontology);
@@ -33,18 +35,7 @@ public class HistoryPolicyIterator implements Iterator<History> {
             List<File> jsonFiles = Arrays.stream(Objects.requireNonNull(directory.listFiles())).filter(x -> x.getName().endsWith(".json")).toList();
 
             for (File fi : jsonFiles) {
-                byte[] data = new byte[(int) fi.length()];
-                FileInputStream stream;
-                try {
-                    stream = new FileInputStream(fi);
-                    stream.read(data);
-                    stream.close();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                String policy = new String(data, StandardCharsets.UTF_8);
-                JSONObject objects = new JSONObject(policy);
-                JSONArray history = (JSONArray) objects.get("@policy_set");
+                JSONArray history = getJsonArray(fi);
                 SignedPolicy<ANDNODE>[] signedPolicies = convert(history);
                 String id = fi.getName().substring(0, fi.getName().length() - ".json".length());
                 histories.add(new History(id, signedPolicies));
@@ -55,6 +46,21 @@ public class HistoryPolicyIterator implements Iterator<History> {
         }
     }
 
+    private static JSONArray getJsonArray(File file) {
+        byte[] data = new byte[(int) file.length()];
+        FileInputStream stream;
+        try {
+            stream = new FileInputStream(file);
+            stream.read(data);
+            stream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        String policy = new String(data, StandardCharsets.UTF_8);
+        JSONObject objects = new JSONObject(policy);
+        return (JSONArray) objects.get("@policy_set");
+    }
+
     @Override
     public boolean hasNext() {
         return currentIndex < this.histories.size();
@@ -62,6 +68,9 @@ public class HistoryPolicyIterator implements Iterator<History> {
 
     @Override
     public History next() {
+        if(!hasNext()){
+            throw new NoSuchElementException();
+        }
         return this.histories.get(currentIndex++);
     }
 

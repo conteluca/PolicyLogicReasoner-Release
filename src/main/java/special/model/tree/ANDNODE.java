@@ -1,4 +1,4 @@
-package special.model;
+package special.model.tree;
 
 import java.io.Serializable;
 import java.util.*;
@@ -144,7 +144,6 @@ public class ANDNODE implements Serializable {
             hashCode = hashCode + hashValues + hashKeys;
         }
         return 17 * 3 + hashCode;
-//        return 17 * 3 + Objects.hash(this.conceptNames, this.dataConstraints, this.children, this.orNodes);
     }
 
     private boolean areEqualChildren(Map<OWLObjectProperty, List<ANDNODE>> map1, Map<OWLObjectProperty, List<ANDNODE>> map2) {
@@ -823,8 +822,8 @@ public class ANDNODE implements Serializable {
                 builder.append("\"").append(dataProperty.getIRI().getShortForm()).append("\":{");
 
                 for (IntRange range : dataConstraints.get(dataProperty)) {
-                    int min = range.getMin();
-                    int max = range.getMax();
+                    int min = range.min();
+                    int max = range.max();
                     builder.append("\"@interval\":[" + min + "," + max + "]");
                 }
 
@@ -1026,7 +1025,7 @@ public class ANDNODE implements Serializable {
                 for (IntRange range : dataConstraints.get(dataProperty)) {
                     OWLDataSomeValuesFrom valuesFrom = factory.getOWLDataSomeValuesFrom(
                             dataProperty,
-                            factory.getOWLDatatypeMinMaxInclusiveRestriction(range.getMin(),range.getMax()));
+                            factory.getOWLDatatypeMinMaxInclusiveRestriction(range.min(),range.max()));
                     classSet.add(valuesFrom);
                 }
             }

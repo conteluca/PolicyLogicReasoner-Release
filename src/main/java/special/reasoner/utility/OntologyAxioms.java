@@ -1,10 +1,6 @@
-package special.reasoner.translators;
-
-import org.semanticweb.owlapi.apibinding.OWLManager;
+package special.reasoner.utility;
 import org.semanticweb.owlapi.model.*;
-import special.reasoner.DataManager;
 
-import java.io.File;
 import java.util.List;
 import java.util.Set;
 
@@ -26,14 +22,6 @@ public class OntologyAxioms {
         return classes;
     }
 
-    public Set<OWLNamedIndividual> getIndividuals() {
-        return individuals;
-    }
-
-    public Set<OWLDataProperty> getDataProperties() {
-        return dataProperties;
-    }
-
     public OntologyAxioms(OWLOntology ontology ) {
         this.properties = ontology.getObjectPropertiesInSignature();
         this.classes = ontology.getClassesInSignature();
@@ -44,7 +32,7 @@ public class OntologyAxioms {
     public OWLObjectProperty getProperty(String property) {
         return properties
                 .stream()
-                .filter(prop -> prop.getIRI().toString().toString().equals(property))
+                .filter(prop -> prop.getIRI().toString().equals(property))
                 .toList()
                 .get(0);
     }
@@ -53,7 +41,7 @@ public class OntologyAxioms {
 
         List<String> list = this.properties
                 .stream()
-                .map(dataProperty -> dataProperty.getIRI().toString().toString())
+                .map(dataProperty -> dataProperty.getIRI().toString())
                 .toList();
         return list.contains(property);
     }

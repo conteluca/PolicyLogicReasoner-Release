@@ -1,48 +1,31 @@
 package special.model;
 
+import special.model.tree.ANDNODE;
+
 import java.util.Arrays;
+import java.util.Objects;
 
-public class History {
-    private String id;
-    private String description;
-    private String [] ontologies;
-    private String [] context;
-    private SignedPolicy<ANDNODE> [] signedPolicy;
-
-    public History(String id,SignedPolicy<ANDNODE>[] signedPolicy) {
-        this.id=id;
-        this.signedPolicy = signedPolicy;
-    }
-
+public record History(String id, SignedPolicy<ANDNODE>[] signedPolicy) {
     @Override
     public String toString() {
         return "History{" +
                 "id='" + id + '\'' +
-                ", description='" + description + '\'' +
-                ", ontologies=" + Arrays.toString(ontologies) +
-                ", context=" + Arrays.toString(context) +
                 ", signedPolicy=" + Arrays.toString(signedPolicy) +
                 '}';
     }
 
-    public String getId() {
-        return id;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        History history = (History) o;
+        return Objects.equals(id, history.id) && Arrays.equals(signedPolicy, history.signedPolicy);
     }
 
-    public String getDescription() {
-        return description;
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(id);
+        result = 31 * result + Arrays.hashCode(signedPolicy);
+        return result;
     }
-
-    public String[] getOntologies() {
-        return ontologies;
-    }
-
-    public String[] getContext() {
-        return context;
-    }
-
-    public SignedPolicy<ANDNODE>[] getSignedPolicy() {
-        return signedPolicy;
-    }
-
 }

@@ -9,8 +9,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
-import special.model.ANDNODE;
-import special.model.ORNODE;
+import special.model.tree.ANDNODE;
+import special.model.tree.ORNODE;
 
 /**
  * Cache to save the normalized policies. A policy is mapped with a tree.
@@ -20,10 +20,6 @@ import special.model.ORNODE;
 public class PolicyCacheInMemory<T> implements SingleKeyCache<T> {
 
     private final Map<T, ORNODE> map;
-
-    public PolicyCacheInMemory() {
-        this.map = new HashMap<>();
-    }
 
     public PolicyCacheInMemory(int size) {
         if (size <= 0) {
@@ -56,7 +52,7 @@ public class PolicyCacheInMemory<T> implements SingleKeyCache<T> {
             map.put(key, disjuncts);
             return true;
         } else {
-            return node.addTrees(disjuncts.getDisjuncts());
+            return node.addTrees(disjuncts.getDisjunction());
         }
     }
 

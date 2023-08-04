@@ -5,8 +5,8 @@ import org.semanticweb.HermiT.Reasoner;
 import org.semanticweb.HermiT.ReasonerFactory;
 import org.semanticweb.owlapi.model.OWLOntology;
 import org.semanticweb.owlapi.reasoner.BufferingMode;
-import special.model.ANDNODE;
-import special.model.ORNODE;
+import special.model.tree.ANDNODE;
+import special.model.tree.ORNODE;
 import special.reasoner.cache.IntervalSafePoliciesCacheInMemory;
 import special.reasoner.cache.PolicyCacheInMemory;
 

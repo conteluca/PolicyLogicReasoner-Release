@@ -25,7 +25,7 @@ public interface OntologyReadable<T extends OWLObject> {
 
     boolean isFunctional(T el);
 
-    public OWLOntology getRootOntology();
+    OWLOntology getRootOntology();
 
-    public OWLDataFactory getDataFactory();
+    OWLDataFactory getDataFactory();
 }

@@ -1,5 +1,7 @@
-package special.model;
+package special.reasoner.utility;
 
+
+import special.model.PrivacyPolicy;
 
 import java.io.FileWriter;
 import java.io.IOException;

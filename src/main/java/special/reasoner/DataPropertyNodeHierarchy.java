@@ -11,7 +11,7 @@ import org.semanticweb.owlapi.model.OWLDataProperty;
 import org.semanticweb.owlapi.reasoner.impl.OWLDataPropertyNode;
 
 /**
- * Node OWLDataProperty of constraints's hierarchy
+ * Node OWLDataProperty of constraint's hierarchy
  *
  * @author Luca Ioffredo
  *
