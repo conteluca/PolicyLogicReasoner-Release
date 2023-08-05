@@ -1195,16 +1195,30 @@ public class PLReasoner implements OWLReasoner {
         }
         return isSubsumpted;
     }
-    public boolean isEntailed(@Nonnull PolicyLogic<OWLClassExpression> c, @Nonnull SignedPolicy<ANDNODE>[] history) {
+    public boolean isEntailed(@Nonnull PolicyLogic<OWLClassExpression> c, @Nonnull History history) {
         this.stsCount = 0;
         ANDNODE buildTree = this.buildTree(c.expression());
         //apply interval safe C,H
-        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(buildTree, history);
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(buildTree, history.signedPolicy());
         ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, history);
+        return structuralSubsumption(merged, history.signedPolicy());
+    }
+    public boolean isEntailed(@Nonnull PolicyLogic<OWLClassExpression> c, @Nonnull PolicyLogic<OWLClassExpression> d) {
+        this.stsCount = 0;
+        ANDNODE buildTree = this.buildTree(c.expression());
+        ANDNODE buildTreeD = this.buildTree(d.expression());
+        Collection<ANDNODE> collectionOfTrees = new ArrayList<>();
+        collectionOfTrees.add(buildTree);
+        //apply interval safe C,H
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,buildTreeD.getORNodes().getFirst());
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, merged);
     }
     private boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull ANDNODE signedPolicy) {
         boolean result = true;
