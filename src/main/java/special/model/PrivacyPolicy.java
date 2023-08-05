@@ -1,12 +1,10 @@
 package special.model;
-
-import org.semanticweb.owlapi.model.OWLClassExpression;
 /**
  * @author Luca Conte
  */
 
 public class PrivacyPolicy {
-    private final PolicyLogic<OWLClassExpression> policyLogic;
+    private final PolicyLogic<?> policyLogic;
     private final History history;
     private boolean isCompliant;
     private int index = 0;
@@ -14,7 +12,7 @@ public class PrivacyPolicy {
 
     private final double[] executionTime = new double[10];
 
-    public PrivacyPolicy(PolicyLogic<OWLClassExpression> policyLogic, History history) {
+    public PrivacyPolicy(PolicyLogic<?> policyLogic, History history) {
         this.policyLogic = policyLogic;
         this.history = history;
     }

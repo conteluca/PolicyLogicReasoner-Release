@@ -2,9 +2,8 @@ package special.reasoner;
 
 import org.semanticweb.owlapi.model.*;
 import special.model.*;
-import special.reasoner.utility.CsvWriter;
-import special.reasoner.utility.HistoryIterator;
-import special.reasoner.utility.PolicyIterator;
+import special.reasoner.factory.ReasonerBuilder;
+import special.reasoner.utility.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,7 +17,8 @@ import java.util.List;
 
 
 class Main {
-    private static final OWLOntology ontology = DataManager.loadOntology(DataManager.PATH_NEW_ONTOLOGY);
+
+    private static final OWLOntology ontology = OntologyLoader.load();
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
     private static final String[] headers;
 
@@ -40,13 +40,12 @@ class Main {
                 "Time 10(ms)"
         };
     }
-
-    private static final String TREE_FOLDER = TestbedIDOnlyNotCompliant.SIZE_100_20;
-    private static final String HISTORY_FOLDER = TestbedIDOnlyHistory.SIZE_100_20;
+    private static final String TREE_FOLDER = Benchmark.Policy.Compliant.SIZE_100_20;
+    private static final String HISTORY_FOLDER = Benchmark.History.SIZE_100_20;
     private static final List<PrivacyPolicy> policiesComparison = new ArrayList<>();
 
     public static void main(String[] args) {
-        String csvFile = "not_compliant_size_100_20.csv";
+        String csvFile = "compliant_size_100_20.csv";
 
         PolicyIterator jsonIterator =
                 new PolicyIterator(ontology, TREE_FOLDER, false);
@@ -95,4 +94,6 @@ class Main {
         }
 
     }
+
+
 }

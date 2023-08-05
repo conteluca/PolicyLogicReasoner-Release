@@ -23,6 +23,7 @@ import special.model.tree.IntRange;
 import special.model.tree.ORNODE;
 import special.reasoner.cache.*;
 import special.model.SignedPolicy;
+import special.reasoner.factory.PLConfiguration;
 
 import static org.semanticweb.owlapi.util.OWLAPIPreconditions.*;
 import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.*;
