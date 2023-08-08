@@ -40,44 +40,25 @@ class Main {
         };
     }
 
-    private static final String POLICY_FOLDER = Benchmark.Policy.Compliant.SIZE_100_20;
-    private static final String HISTORY_FOLDER = Benchmark.History.SIZE_100_20;
-    private static final List<PrivacyPolicy> policiesComparison = new ArrayList<>();
+    private static final String POLICY_FOLDER = Benchmark.Stress.Policy.NonCompliant.SIZE_100_OVRD_5;
+    private static final String HISTORY_FOLDER = Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_5;
+    private static final List<PrivacyPolicy> policyComparison = new ArrayList<>();
 
     public static void main(String[] args) {
-
-        final PolicyIterator policyIterator =
-                new PolicyIterator(ontology, POLICY_FOLDER, false);
-
-        final HistoryIterator historyIterator = new HistoryIterator(ontology, HISTORY_FOLDER, false);
-        History history = historyIterator.next();
-
-
-        do {
-            final PolicyLogic<OWLClassExpression> c = policyIterator.toOwl();
-
-            boolean isEntailed = plReasoner.isEntailed(c,history); // COMPLIANCE CHECK
-
-            if(isEntailed){
-                System.out.println(c.id()+" entails "+history.id());
-            }else{
-                System.out.println(c.id()+" doesn't entails "+history.id());
-            }
-        } while (policyIterator.hasNext());
-
+        temp();
     }
 
     static void temp() {
-        String csvFile = "compliant_size_100_20.csv";
+        String csvFile = "test-results/stress/non-compliant/non-compliant_size_100_OVRD_5.csv";
         final PolicyIterator jsonIterator =
-                new PolicyIterator(ontology, POLICY_FOLDER, false);
+                new PolicyIterator(ontology, POLICY_FOLDER, true);
 
         while (jsonIterator.hasNext()) {
 
             PolicyLogic<OWLClassExpression> owl = jsonIterator.toOwl();
 
             HistoryIterator historyIterator =
-                    new HistoryIterator(ontology, HISTORY_FOLDER, false);
+                    new HistoryIterator(ontology, HISTORY_FOLDER, true);
 
 
             while (historyIterator.hasNext()) {
@@ -98,14 +79,14 @@ class Main {
                     privacyPolicy.setStsCount(stsCount);
 
                 }
-                policiesComparison.add(privacyPolicy);
+                policyComparison.add(privacyPolicy);
             }
         }
 
         try {
             final CsvWriter csvWriter = new CsvWriter(csvFile);
             csvWriter.writeHeader(headers);
-            for (PrivacyPolicy privacyPolicy : policiesComparison) {
+            for (PrivacyPolicy privacyPolicy : policyComparison) {
                 csvWriter.writeRow(privacyPolicy);
             }
             System.out.println(csvFile + " wrote");
