@@ -16,7 +16,6 @@ Check https://trapeze-project.eu/ for more details.
 - [Getting Started](#features)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Configuration](#configuration)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -97,7 +96,7 @@ class ComplianceTest{
 
     private static final OWLOntology ontology = OntologyLoader.load();
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology); 
-    private static final String POLICY_FOLDER = Benchmark.Policy.Compliant.SIZE_100_20; // HERE
+    private static final String POLICY_FOLDER = Benchmark.Realistic.Policy.Compliant.SIZE_100_20; // HERE
     
 }
 ```
@@ -107,7 +106,7 @@ class ComplianceTest{
     
     private static final OWLOntology ontology = OntologyLoader.load();
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology); 
-    private static final String POLICY_FOLDER = Benchmark.Policy.Compliant.SIZE_100_20; // HERE
+    private static final String POLICY_FOLDER = Benchmark.Realistic.Policy.Compliant.SIZE_100_20; // HERE
 
     public static void main(String[] args) {
         
@@ -153,7 +152,7 @@ class ComplianceTest{
     /*
     ... all declarations
     */
-    private static final String HISTORY_FOLDER = Benchmark.History.SIZE_100_20;  // ADD HERE
+    private static final String HISTORY_FOLDER = Benchmark.Realistic.History.SIZE_100_20;  // ADD HERE
 
     public static void main(String[] args) {
 
@@ -187,15 +186,9 @@ and enhance your compliance verification process!
 
 For more advanced usage and in-depth examples, refer to the Examples section.
 
-## Configuration
-
-If the project requires specific configurations, explain how to properly configure it.
-For instance, you can talk about configuration files, environment variables, etc.
-
 ## Contributing
 
-Describe how others can contribute to the project.
-Explain contribution guidelines, the pull request process, code conventions, etc.
+If you want to contribute to the project check https://trapeze-project.eu/.
 
 ## License
 
