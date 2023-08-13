@@ -1,0 +1,38 @@
+{
+   "@description":"Realistic query for dynamic consent / LBS, version = old",
+   "@ontologies":[
+         "http://base.ontologies.com/base",
+         "http://www.proximus.be/business-policy",
+         "http://www.specialprivacy.eu/langs/business-policy",
+         "http://www.specialprivacy.eu/vocabs/data",
+         "http://www.specialprivacy.eu/vocabs/duration",
+         "http://www.specialprivacy.eu/vocabs/processing",
+         "https://www.specialprivacy.eu/langs/usage-policy",
+         "https://www.specialprivacy.eu/regulations/gdpr",
+         "https://www.specialprivacy.eu/vocabs/locations",
+         "https://www.specialprivacy.eu/vocabs/purposes",
+         "https://www.specialprivacy.eu/vocabs/recipients"
+      ],
+   "@context":{
+         "@base":"http://base.ontologies.com/base#",
+         "pxs":"http://www.proximus.be/business-policy#",
+         "sbp":"http://www.specialprivacy.eu/langs/business-policy#",
+         "sgdpr":"https://www.specialprivacy.eu/regulations/gdpr#",
+         "spl":"https://www.specialprivacy.eu/langs/usage-policy#",
+         "svd":"http://www.specialprivacy.eu/vocabs/data#",
+         "svdu":"http://www.specialprivacy.eu/vocabs/duration#",
+         "svl":"https://www.specialprivacy.eu/vocabs/locations#",
+         "svpr":"http://www.specialprivacy.eu/vocabs/processing#",
+         "svpu":"https://www.specialprivacy.eu/vocabs/purposes#",
+         "svr":"https://www.specialprivacy.eu/vocabs/recipients#"
+      },
+   "@policy_set":[
+         {
+            "https://www.specialprivacy.eu/langs/usage-policy#hasData":{"@instance":"http://base.ontologies.com/base#instance-73-of-Location"},
+            "https://www.specialprivacy.eu/langs/usage-policy#hasPurpose":"http://www.proximus.be/business-policy#SocialEventRecommendation",
+            "https://www.specialprivacy.eu/langs/usage-policy#hasProcessing":"http://www.specialprivacy.eu/vocabs/processing#Analyze",
+            "https://www.specialprivacy.eu/langs/usage-policy#hasRecipient":{"@instance":"http://base.ontologies.com/base#ACME"},
+            "https://www.specialprivacy.eu/langs/usage-policy#durationInDays":{"@interval":[30,90]}
+         }
+      ]
+}
