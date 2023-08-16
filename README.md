@@ -73,19 +73,21 @@ Follow these steps to get started with the Privacy Policy Compliance Checker:
 
 # Usage
 Once the installation is complete, you can start using the compliance checker.
-- **Import the ontology**: load ontology into your project using OntologyLoader class
+- **Import the ontology**: load ontology into your project using OntologyLoader class. You can load from file or from web:
 ```java
 class ComplianceTest{
-    
-    private static final OWLOntology ontology = OntologyLoader.load();  // HERE
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);  // HERE from file
+    private static final OWLOntology ontology_web = OntologyLoader.load("http://example.com/ontology.owl"); // HERE from web
+
 
 }
 ```
 - **Create Policy Logic Reasoner**: create a new reasoner with buildReasoner method: 
 ```java
 class ComplianceTest{
-    
-    private static final OWLOntology ontology = OntologyLoader.load();
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY); 
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology); // HERE
 
 }
@@ -94,7 +96,7 @@ class ComplianceTest{
 ```java
 class ComplianceTest{
 
-    private static final OWLOntology ontology = OntologyLoader.load();
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology); 
     private static final String POLICY_FOLDER = Benchmark.Realistic.Policy.Compliant.SIZE_100_20; // HERE
     
@@ -103,8 +105,8 @@ class ComplianceTest{
 -  **Declare a PolicyIterator**: policy iterator loads all policies from .json files and allows to iterate them. If you want to enable Knowledge Base check of terms then set the third parameter to true.
 ```java
 class ComplianceTest{
-    
-    private static final OWLOntology ontology = OntologyLoader.load();
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology); 
     private static final String POLICY_FOLDER = Benchmark.Realistic.Policy.Compliant.SIZE_100_20; // HERE
 
@@ -178,6 +180,104 @@ class ComplianceTest{
     }
 }
 ```
+-  **Use isEntailed with OWLClassExpression**: To check compliance between two privacy policies, use the isEntailed method differently.
+```java
+class ComplianceTest{
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+    private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
+    
+    public static void main(String[] args) {
+      
+        final OWLClassExpression c = loadSomeExpression(); // HERE
+        final OWLClassExpression d = loadSomeExpression(); // HERE
+        
+      boolean isEntailed = plReasoner.isEntailed(c, d);  // COMPLIANCE CHECK
+
+    }
+}
+```
+-  **Use isEntailed with JSON policy file**: To check compliance between two privacy policies, use the isEntailed method differently.
+```java
+class ComplianceTest{
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+    private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
+    
+    public static void main(String[] args) {
+      
+        final File c = someJSONpolicy(); // HERE
+        final File d = someJSONpolicy(); // HERE
+        
+      boolean isEntailed = plReasoner.isEntailed(c, d);  // COMPLIANCE CHECK
+
+    }
+}
+```
+-  **Use isEntailedHistory with JSON policy file**: To check compliance between privacy policy and history, use the isEntailedHistory method differently.
+```java
+class ComplianceTest{
+
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+    private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
+    
+    public static void main(String[] args) {
+      
+        final File c = someJSONpolicy(); // HERE
+        final File h = someHistorypolicy(); // HERE
+        
+      boolean isEntailed = plReasoner.isEntailedHistory(c, h);  // COMPLIANCE CHECK
+
+    }
+}
+```
+-  **Use isEntailed with two trees (internal format)**: To check compliance between two privacy policies, use the isEntailed method differently and use TranslatorEngine to parse policies.
+```java
+import special.model.tree.ANDNODE;
+
+class ComplianceTest {
+
+  private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+  private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
+
+  public static void main(String[] args) {
+    File policy1 = new File("test/testbed-LBS-old-onto-full/realistic/size-10-2/compliant/Contr-pol-compl-no-exc.json");
+    File policy2 =new File("test/testbed-LBS-old-onto-full/realistic/size-10-2/compliant/Contr-pol-compl-ovrd-1.json");
+
+    TranslatorEngine translator = new TranslatorEngine(new OntologyAxioms(ontology));
+    ANDNODE c = translator.parseJSONPolicy(policy1);
+    ANDNODE d = translator.parseJSONPolicy(policy2);
+    boolean entailed = plReasoner.isEntailed(c, d);
+    System.out.println(entailed);
+
+  }
+}
+```
+-  **Use isEntailed with tree and history (internal format)**: To check compliance between privacy policy and history, use the isEntailed and TranslatorEngine to parse policies.
+
+```java
+import special.model.SignedPolicy;
+import special.model.tree.ANDNODE;
+
+class ComplianceTest {
+
+  private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+  private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
+
+  public static void main(String[] args) {
+    File policy = new File("test/testbed-LBS-old-onto-full/realistic/size-10-2/compliant/Contr-pol-compl-no-exc.json");
+    File history =new File("test/testbed-LBS-old-onto-full/realistic/size-10-2/histories/hist-10-2-1.json");
+
+    TranslatorEngine translator = new TranslatorEngine(new OntologyAxioms(ontology));
+    ANDNODE c = translator.parseJSONPolicy(policy);
+    SignedPolicy<ANDNODE>[] h = translator.parseJSONHistory(history);
+    boolean entailed = plReasoner.isEntailed(c, h);
+    System.out.println(entailed);
+
+  }
+}
+```
+
 Make sure to refer to the Documentation for a comprehensive understanding of the available methods,
 their parameters, and how to interpret the compliance results.
 

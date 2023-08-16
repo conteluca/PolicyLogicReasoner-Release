@@ -5,10 +5,13 @@
  */
 package special.reasoner;
 
+import java.io.File;
 import java.util.*;
 import java.util.stream.*;
 import javax.annotation.*;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.semanticweb.owlapi.model.*;
 import org.semanticweb.owlapi.reasoner.*;
 import org.semanticweb.owlapi.reasoner.impl.*;
@@ -24,6 +27,8 @@ import special.model.tree.ORNODE;
 import special.reasoner.cache.*;
 import special.model.SignedPolicy;
 import special.reasoner.factory.PLConfiguration;
+import special.reasoner.utility.OntologyAxioms;
+import special.reasoner.utility.TranslatorEngine;
 
 import static org.semanticweb.owlapi.util.OWLAPIPreconditions.*;
 import static org.semanticweb.owlapi.util.OWLAPIStreamUtils.*;
@@ -1195,6 +1200,7 @@ public class PLReasoner implements OWLReasoner {
         }
         return isSubsumpted;
     }
+
     public boolean isEntailed(@Nonnull PolicyLogic<OWLClassExpression> c, @Nonnull History history) {
         this.stsCount = 0;
         ANDNODE buildTree = this.buildTree(c.expression());
@@ -1220,6 +1226,115 @@ public class PLReasoner implements OWLReasoner {
 
         return structuralSubsumption(merged, merged);
     }
+    public boolean isEntailed(@Nonnull OWLClassExpression c, @Nonnull OWLClassExpression d) {
+        this.stsCount = 0;
+        ANDNODE buildTree = this.buildTree(c);
+        ANDNODE buildTreeD = this.buildTree(d);
+        Collection<ANDNODE> collectionOfTrees = new ArrayList<>();
+        collectionOfTrees.add(buildTree);
+        //apply interval safe C,H
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,buildTreeD.getORNodes().getFirst());
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, merged);
+    }
+    public boolean isEntailed(@Nonnull ANDNODE c,@Nonnull ANDNODE d){
+        this.stsCount = 0;
+        Collection<ANDNODE> collectionOfTrees = new ArrayList<>();
+        collectionOfTrees.add(c);
+        //apply interval safe C,H
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,d.getORNodes().getFirst());
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, merged);
+
+    }
+    public boolean isEntailed(@Nonnull ANDNODE c,@Nonnull SignedPolicy<ANDNODE>[] history){
+        this.stsCount = 0;
+        //apply interval safe C,H
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(c, history);
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, history);
+
+    }
+    public boolean isEntailed(@Nonnull File c, @Nonnull File d) {
+        this.stsCount = 0;
+        TranslatorEngine translatorEngine = new TranslatorEngine(new OntologyAxioms(this.rootOntology));
+        PolicyLogic<JSONArray> cc = translatorEngine.getArrayPolicyLogic(c);
+        PolicyLogic<JSONArray> dd = translatorEngine.getArrayPolicyLogic(d);
+
+        ORNODE ornode = new ORNODE();
+
+        for (Object o : cc.expression()) {
+            ANDNODE andnode = new ANDNODE();
+                translatorEngine.convertWithNoCheck((JSONObject) o, andnode, new boolean[1]);
+            ornode.add(andnode);
+        }
+        PolicyLogic<ORNODE> left = new PolicyLogic<>("0", ornode);
+
+        ornode = new ORNODE();
+
+        for (Object o : dd.expression()) {
+            ANDNODE andnode = new ANDNODE();
+                translatorEngine.convertWithNoCheck((JSONObject) o, andnode, new boolean[1]);
+            ornode.add(andnode);
+        }
+        PolicyLogic<ORNODE> right = new PolicyLogic<>("1", ornode);
+
+        ANDNODE x = new ANDNODE();
+        x.addORnode(left.expression());
+        Collection<ANDNODE> collectionOfTrees = new ArrayList<>();
+        collectionOfTrees.add(x);
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,right.expression());
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, merged);
+    }
+    public boolean isEntailedHistory(@Nonnull File c, @Nonnull File history) {
+        this.stsCount = 0;
+        TranslatorEngine translatorEngine = new TranslatorEngine(new OntologyAxioms(this.rootOntology));
+        PolicyLogic<JSONArray> cc = translatorEngine.getArrayPolicyLogic(c);
+        JSONArray policyLogic = translatorEngine.getJsonArray(history);
+
+        ORNODE ornode = new ORNODE();
+
+        for (Object o : cc.expression()) {
+            ANDNODE andnode = new ANDNODE();
+                translatorEngine.convertWithNoCheck((JSONObject) o, andnode, new boolean[1]);
+            ornode.add(andnode);
+        }
+        PolicyLogic<ORNODE> left = new PolicyLogic<>("0", ornode);
+
+        SignedPolicy<ANDNODE>[] signedPolicies = new SignedPolicy[policyLogic.length()];
+        int index = 0;
+        for (Object o : policyLogic) {
+            ANDNODE andnode = new ANDNODE();
+            boolean[] action = new boolean[1];
+
+                translatorEngine.convertWithNoCheckHistory((JSONObject) o, andnode, action);
+
+            signedPolicies[index++] = new SignedPolicy<>(action[0], andnode);
+        }
+
+        ANDNODE x = new ANDNODE();
+        x.addORnode(left.expression());
+        ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(x,signedPolicies);
+        ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
+        this.applyRange(normalizedUnion);
+        ORNODE merged = this.mergeNominal(normalizedUnion);
+
+        return structuralSubsumption(merged, merged);
+    }
+
     private boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull ANDNODE signedPolicy) {
         boolean result = true;
         for (ANDNODE C : c) {

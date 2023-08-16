@@ -2,9 +2,11 @@ package special.reasoner;
 
 import org.semanticweb.owlapi.model.*;
 import special.model.*;
+import special.model.tree.ANDNODE;
 import special.reasoner.factory.ReasonerBuilder;
 import special.reasoner.utility.*;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +19,7 @@ import java.util.List;
 
 class Main {
 
-    private static final OWLOntology ontology = OntologyLoader.load();
+    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
     private static final String[] headers;
 
