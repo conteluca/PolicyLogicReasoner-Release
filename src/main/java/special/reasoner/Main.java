@@ -19,7 +19,7 @@ import java.util.List;
 
 class Main {
 
-    private static final OWLOntology ontology = OntologyLoader.load(OntologyLoader.PATH_ONTOLOGY);
+    private static final OWLOntology ontology = OntologyLoader.load(new File(OntologyLoader.PATH_ONTOLOGY));
     private static final PLReasoner plReasoner = ReasonerBuilder.buildReasoner(ontology);
     private static final String[] headers;
 
