@@ -10,19 +10,34 @@ import org.semanticweb.owlapi.reasoner.OWLReasonerRuntimeException;
 
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
 public class OntologyLoader {
-    private OntologyLoader() {
-    }
+    private OntologyLoader() {}
 
     private static final Logger LOG = Logger.getLogger(OntologyLoader.class);
     private static final OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
     private static final Set<OWLOntology> ontologies = new HashSet<>();
     public static final String PATH_ONTOLOGY = "ontology/";
 
+    public static OWLOntology load(@Nonnull String[] ontologiesIRI) {
+        ontologies.clear();
+        Set<String> set = new HashSet<>(Arrays.asList(ontologiesIRI));
+
+        for (String uri : set) {
+            OWLOntology load = OntologyLoader.load(uri);
+            ontologies.add(load);
+        }
+        try {
+            return manager.createOntology(IRI.create("https://trapeze-project.eu/tmp.ontology"),
+                    ontologies);
+        } catch (OWLOntologyCreationException e) {
+            throw new RuntimeException(e);
+        }
+    }
     public static OWLOntology load(@Nonnull String ontologyIRIString) {
         IRI ontologyIRI = IRI.create(ontologyIRIString);
 
@@ -31,7 +46,7 @@ public class OntologyLoader {
         try {
             OWLOntology ontology = manager.loadOntology(ontologyIRI);
             // Ora hai caricato l'ontologia e puoi iniziare a lavorare con essa
-            System.out.println("Ontologia caricata: " + ontology);
+
             return ontology;
         } catch (OWLOntologyCreationException e) {
             e.printStackTrace();

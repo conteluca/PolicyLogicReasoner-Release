@@ -70,7 +70,7 @@
         <dependency>
             <groupId>net.sourceforge.owlapi</groupId>
             <artifactId>owlapi-parsers</artifactId>
-            <version>5.1.7</version>
+            <version>5.5.0</version>
             <type>jar</type>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-surefire-plugin -->
@@ -82,7 +82,7 @@
         <dependency>
             <groupId>net.sourceforge.owlapi</groupId>
             <artifactId>org.semanticweb.hermit</artifactId>
-            <version>1.4.3.517</version>
+            <version>1.4.5.519</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

@@ -1224,7 +1224,7 @@ public class PLReasoner implements OWLReasoner {
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, merged);
+        return structuralSubsumption(merged, buildTreeD);
     }
     public boolean isEntailed(@Nonnull OWLClassExpression c, @Nonnull OWLClassExpression d) {
         this.stsCount = 0;
@@ -1238,7 +1238,7 @@ public class PLReasoner implements OWLReasoner {
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, merged);
+        return structuralSubsumption(merged, buildTreeD);
     }
     public boolean isEntailed(@Nonnull ANDNODE c,@Nonnull ANDNODE d){
         this.stsCount = 0;
@@ -1250,7 +1250,7 @@ public class PLReasoner implements OWLReasoner {
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, merged);
+        return structuralSubsumption(merged, d);
 
     }
     public boolean isEntailed(@Nonnull ANDNODE c,@Nonnull SignedPolicy<ANDNODE>[] history){
@@ -1297,7 +1297,7 @@ public class PLReasoner implements OWLReasoner {
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, merged);
+        return structuralSubsumption(merged, right.expression());
     }
     public boolean isEntailedHistory(@Nonnull File c, @Nonnull File history) {
         this.stsCount = 0;
@@ -1332,7 +1332,7 @@ public class PLReasoner implements OWLReasoner {
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, merged);
+        return structuralSubsumption(merged, signedPolicies);
     }
 
     private boolean structuralSubsumption(@Nonnull ORNODE c, @Nonnull ANDNODE signedPolicy) {

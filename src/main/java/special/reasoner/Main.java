@@ -2,7 +2,6 @@ package special.reasoner;
 
 import org.semanticweb.owlapi.model.*;
 import special.model.*;
-import special.model.tree.ANDNODE;
 import special.reasoner.factory.ReasonerBuilder;
 import special.reasoner.utility.*;
 
@@ -15,7 +14,6 @@ import java.util.List;
 /**
  * @author Luca Conte
  */
-
 
 class Main {
 
@@ -44,159 +42,144 @@ class Main {
 
     private static final List<PrivacyPolicy> policyComparison = new ArrayList<>();
 
-    private static void realisticTest() {
-        // TEST 1
-        System.out.println("Realistic Policy VS History SIZE 10-2 (compliant)");
-        String policy = Benchmark.Realistic.Policy.Compliant.SIZE_10_2;
-        String history = Benchmark.Realistic.History.SIZE_10_2;
-        String output = "test-results/realistic/compliant/compliant_size_10_2.csv";
-        complianceCheckTest(policy, history, output);
-
-
-        // TEST 2
-        System.out.println("Realistic Policy VS History SIZE 50-10 (compliant)");
-        policy = Benchmark.Realistic.Policy.Compliant.SIZE_50_10;
-        history = Benchmark.Realistic.History.SIZE_50_10;
-        output = "test-results/realistic/compliant/compliant_size_50_10.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 3
-        System.out.println("Realistic Policy VS History SIZE 100-20 (compliant)");
-        policy = Benchmark.Realistic.Policy.Compliant.SIZE_100_20;
-        history = Benchmark.Realistic.History.SIZE_100_20;
-        output = "test-results/realistic/compliant/compliant_size_100_20.csv";
-        complianceCheckTest(policy, history, output);
-
-
-        // non-compliant tests
-        // TEST 1
-        System.out.println("Realistic Policy VS History SIZE 10-2 (non compliant)");
-        policy = Benchmark.Realistic.Policy.NonCompliant.SIZE_10_2;
-        history = Benchmark.Realistic.History.SIZE_10_2;
-        output = "test-results/realistic/non-compliant/non_compliant_size_10_2.csv";
-        complianceCheckTest(policy, history, output);
-
-
-        // TEST 2
-        System.out.println("Realistic Policy VS History SIZE 50-10 (non compliant)");
-        policy = Benchmark.Realistic.Policy.NonCompliant.SIZE_50_10;
-        history = Benchmark.Realistic.History.SIZE_50_10;
-        output = "test-results/realistic/non-compliant/non_compliant_size_50_10.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 3
-        System.out.println("Realistic Policy VS History SIZE 100-20 (non compliant)");
-        policy = Benchmark.Realistic.Policy.NonCompliant.SIZE_100_20;
-        history = Benchmark.Realistic.History.SIZE_100_20;
-        output = "test-results/realistic/non-compliant/non_compliant_size_100_20.csv";
-        complianceCheckTest(policy, history, output);
-
+    private static void realisticTestCompliant() {
+        /*
+        TESTING ALL COMPLIANT WITH HISTORIES
+         */
+        String[] p = new String[]{
+                Benchmark.Realistic.Policy.Compliant.SIZE_10_2,
+                Benchmark.Realistic.Policy.Compliant.SIZE_50_10,
+                Benchmark.Realistic.Policy.Compliant.SIZE_100_20,
+        };
+        String[] h = new String[]{
+                Benchmark.Realistic.History.SIZE_10_2,
+                Benchmark.Realistic.History.SIZE_50_10,
+                Benchmark.Realistic.History.SIZE_100_20,
+        };
+        String[] o = new String[]{
+                "test-results/realistic/compliant/compliant_SIZE_10_2.csv",
+                "test-results/realistic/compliant/compliant_SIZE_50_10.csv",
+                "test-results/realistic/compliant/compliant_SIZE_100_20.csv"
+        };
+        for (int i = 0; i < p.length; i++) {
+           complianceCheckTest(p[i],h[i],o[i] );
+        }
     }
+    private static void realisticTestNonCompliant() {
+       /*
+        TESTING ALL NON COMPLIANT WITH HISTORIES
+         */
 
-    private static void stressTest() {
-        // TEST 1
-        System.out.println("Stress Policy VS History SIZE 10 ovrd 2 (compliant)");
-        String policy = Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_2;
-        String history = Benchmark.Stress.History.Compliant.SIZE_10_OVRD_2;
-        String output = "test-results/stress/compliant/compliant_size_10_OVRD_2.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 2
-        System.out.println("Stress Policy VS History SIZE 10 ovrd 4 (compliant)");
-        policy = Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_4;
-        history = Benchmark.Stress.History.Compliant.SIZE_10_OVRD_4;
-        output = "test-results/stress/compliant/compliant_size_10_OVRD_4.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 3
-        System.out.println("Stress Policy VS History SIZE 50 ovrd 2 (compliant)");
-        policy = Benchmark.Stress.Policy.Compliant.SIZE_50_OVRD_2;
-        history = Benchmark.Stress.History.Compliant.SIZE_50_OVRD_2;
-        output = "test-results/stress/compliant/compliant_size_50_OVRD_2.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 4
-        System.out.println("Stress Policy VS History SIZE 50 ovrd 4 (compliant)");
-        policy = Benchmark.Stress.Policy.Compliant.SIZE_50_OVRD_4;
-        history = Benchmark.Stress.History.Compliant.SIZE_50_OVRD_4;
-        output = "test-results/stress/compliant/compliant_size_50_OVRD_4.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 5
-        System.out.println("Stress Policy VS History SIZE 100 ovrd 2 (compliant)");
-        policy = Benchmark.Stress.Policy.Compliant.SIZE_100_OVRD_2;
-        history = Benchmark.Stress.History.Compliant.SIZE_100_OVRD_2;
-        output = "test-results/stress/compliant/compliant_size_100_OVRD_2.csv";
-        complianceCheckTest(policy, history, output);
-
-        // TEST 6
-        System.out.println("Stress Policy VS History SIZE 100 ovrd 4 (compliant)");
-        policy = Benchmark.Stress.Policy.Compliant.SIZE_100_OVRD_4;
-        history = Benchmark.Stress.History.Compliant.SIZE_100_OVRD_4;
-        output = "test-results/stress/compliant/compliant_size_100_OVRD_4.csv";
-        complianceCheckTest(policy, history, output);
-
-
-        // non.compliant
-        // TEST 1
-        System.out.println("Stress Policy VS History SIZE 10 ovrd 3 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_3;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_3;
-        output = "test-results/stress/non-compliant/non_compliant_size_10_OVRD_3.csv";
-        complianceCheckTest(policy, history, output);
-
-// TEST 2
-        System.out.println("Stress Policy VS History SIZE 10 ovrd 5 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_5;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_5;
-        output = "test-results/stress/non-compliant/non_compliant_size_10_OVRD_5.csv";
-        complianceCheckTest(policy, history, output);
-
-// TEST 3
-        System.out.println("Stress Policy VS History SIZE 50 ovrd 3 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_3;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_3;
-        output = "test-results/stress/non-compliant/non_compliant_size_50_OVRD_3.csv";
-        complianceCheckTest(policy, history, output);
-
-// TEST 4
-        System.out.println("Stress Policy VS History SIZE 50 ovrd 5 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_5;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_5;
-        output = "test-results/stress/non-compliant/non_compliant_size_50_OVRD_5.csv";
-        complianceCheckTest(policy, history, output);
-
-// TEST 5
-        System.out.println("Stress Policy VS History SIZE 100 ovrd 3 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_3;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_3;
-        output = "test-results/stress/non-compliant/non_compliant_size_100_OVRD_3.csv";
-        complianceCheckTest(policy, history, output);
-
-// TEST 6
-        System.out.println("Stress Policy VS History SIZE 100 ovrd 5 (non-compliant)");
-        policy = Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_5;
-        history = Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_5;
-        output = "test-results/stress/non-compliant/non_compliant_size_100_OVRD_5.csv";
-        complianceCheckTest(policy, history, output);
-
-
+         String[] p = new String[]{
+                Benchmark.Realistic.Policy.NonCompliant.SIZE_10_2,
+                Benchmark.Realistic.Policy.NonCompliant.SIZE_50_10,
+                Benchmark.Realistic.Policy.NonCompliant.SIZE_100_20,
+        };
+         String[] h = new String[]{
+                Benchmark.Realistic.History.SIZE_10_2,
+                Benchmark.Realistic.History.SIZE_50_10,
+                Benchmark.Realistic.History.SIZE_100_20,
+        };
+        String[] o = new String[]{
+                "test-results/realistic/non-compliant/non_compliant_SIZE_10_2.csv",
+                "test-results/realistic/non-compliant/non_compliant_SIZE_50_10.csv",
+                "test-results/realistic/non-compliant/non_compliant_SIZE_100_20.csv"
+        };
+        for (int i = 0; i < p.length; i++) {
+              complianceCheckTest(p[i],h[i],o[i] );
+        }
     }
+    private static void stressTestCompliant(){
+        String[] p = new String[]{
+                Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_2,
+                Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_4,
+                Benchmark.Stress.Policy.Compliant.SIZE_50_OVRD_2,
+                Benchmark.Stress.Policy.Compliant.SIZE_50_OVRD_4,
+                Benchmark.Stress.Policy.Compliant.SIZE_100_OVRD_2,
+                Benchmark.Stress.Policy.Compliant.SIZE_100_OVRD_4,
+        };
+        String[] h = new String[]{
+                Benchmark.Stress.History.Compliant.SIZE_10_OVRD_2,
+                Benchmark.Stress.History.Compliant.SIZE_10_OVRD_4,
+                Benchmark.Stress.History.Compliant.SIZE_50_OVRD_2,
+                Benchmark.Stress.History.Compliant.SIZE_50_OVRD_4,
+                Benchmark.Stress.History.Compliant.SIZE_100_OVRD_2,
+                Benchmark.Stress.History.Compliant.SIZE_100_OVRD_4,
+        };
+        String[] o = new String[]{
+                "test-results/stress/compliant/compliant_size_10_OVRD_2.csv",
+                "test-results/stress/compliant/compliant_size_10_OVRD_4.csv",
+                "test-results/stress/compliant/compliant_size_50_OVRD_2.csv",
+                "test-results/stress/compliant/compliant_size_50_OVRD_4.csv",
+                "test-results/stress/compliant/compliant_size_100_OVRD_2.csv",
+                "test-results/stress/compliant/compliant_size_100_OVRD_4.csv",
+        };
+        for (int i = 0; i < p.length; i++) {
+            complianceCheckTest(p[i],h[i],o[i]);
+        }
+    }
+    private static void stressTestNonCompliant(){
+        String[] p = new String[]{
+                Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_3,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_5,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_50_OVRD_3,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_50_OVRD_5,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_100_OVRD_3,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_100_OVRD_5,
+        };
+        String[] h = new String[]{
+                Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_3,
+                Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_5,
+                Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_3,
+                Benchmark.Stress.History.NonCompliant.SIZE_50_OVRD_5,
+                Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_3,
+                Benchmark.Stress.History.NonCompliant.SIZE_100_OVRD_5,
+        };
+        String[] o = new String[]{
+                "test-results/stress/non-compliant/non_compliant_size_10_OVRD_3.csv",
+                "test-results/stress/non-compliant/non_compliant_size_10_OVRD_5.csv",
+                "test-results/stress/non-compliant/non_compliant_size_50_OVRD_3.csv",
+                "test-results/stress/non-compliant/non_compliant_size_50_OVRD_5.csv",
+                "test-results/stress/non-compliant/non_compliant_size_100_OVRD_3.csv",
+                "test-results/stress/non-compliant/non_compliant_size_100_OVRD_5.csv",
+        };
+        for (int i = 0; i < p.length; i++) {
+            complianceCheckTest(p[i],h[i],o[i]);
+        }
+    }
+    static void test2(){
+    OWLOntology load = OntologyLoader.load(new String[]{
+            "http://www.w3id.org/dpv/dpv-gdpr",
+            "http://www.w3id.org/dpv/dpv-legal",
+            "http://www.w3id.org/dpv/dpv-owl/dpv-pd",
+            "https://w3id.org/dpv/dpv-owl"
+    });
+    PLReasoner reasoner = ReasonerBuilder.buildReasoner(load);
 
+    File c = new File("testSET/Contr-pol-compl-no-exc.json");
+    File h = new File("testSET/hist-10-2-01.json");
+    File d = new File("testSET/Contr-pol-noncompl-exc-003.json");
+
+    boolean entailed2 = reasoner.isEntailedHistory(d,h);
+
+    System.out.println(entailed2);
+
+}
     public static void main(String[] args) {
-        realisticTest();
-        stressTest();
 
+        stressTestCompliant();
+        stressTestNonCompliant();
     }
 
     static void complianceCheckTest(String policyPath, String historyPath, String outputPath) {
-
-        String csvFile = outputPath;
+        policyComparison.clear();
         final PolicyIterator jsonIterator = new PolicyIterator(ontology, policyPath, true);
+            System.out.println(policyPath);
+
 
         while (jsonIterator.hasNext()) {
 
-            PolicyLogic<OWLClassExpression> owl = jsonIterator.toOwl();
+         PolicyLogic<OWLClassExpression> owl = jsonIterator.toOwl();
 
             HistoryIterator historyIterator =
                     new HistoryIterator(ontology, historyPath, true);
@@ -225,12 +208,13 @@ class Main {
         }
 
         try {
-            final CsvWriter csvWriter = new CsvWriter(csvFile);
+            CsvWriter csvWriter = new CsvWriter(outputPath);
+
             csvWriter.writeHeader(headers);
             for (PrivacyPolicy privacyPolicy : policyComparison) {
                 csvWriter.writeRow(privacyPolicy);
             }
-            System.out.println(csvFile + " wrote");
+            System.out.println(outputPath + " wrote");
 
             csvWriter.close();
         } catch (IOException e) {

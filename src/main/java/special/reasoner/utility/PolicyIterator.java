@@ -20,6 +20,7 @@ public class PolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
     private  boolean enableKnowledgeBaseCheck = true;
     private int currentIndex = 0;
     public PolicyIterator(OWLOntology ontology, String path, boolean enableKnowledgeBaseCheck) {
+        this.policies.clear();
         this.enableKnowledgeBaseCheck = enableKnowledgeBaseCheck;
         File directory = new File(path);
         translatorEngine = new TranslatorEngine(new OntologyAxioms(ontology));
@@ -27,6 +28,7 @@ public class PolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
             List<File> jsonFiles = Arrays.stream(Objects.requireNonNull(directory.listFiles())).filter(x -> x.getName().endsWith(".json")).toList();
 
             for (File fi : jsonFiles) {
+
                 PolicyLogic<JSONArray> policyLogic = this.translatorEngine.getArrayPolicyLogic(fi);
                 policies.add(policyLogic);
             }
@@ -69,6 +71,9 @@ public class PolicyIterator implements Iterator<PolicyLogic<JSONArray>> {
             ornode.add(andnode);
         }
         return new PolicyLogic<>(policyLogic.id(), ornode);
+    }
+    public int size(){
+        return this.policies.size();
     }
 
 }
