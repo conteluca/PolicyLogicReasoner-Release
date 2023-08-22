@@ -1220,11 +1220,12 @@ public class PLReasoner implements OWLReasoner {
         collectionOfTrees.add(buildTree);
         //apply interval safe C,H
         ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,buildTreeD.getORNodes().getFirst());
+        ORNODE container = this.normalizeUnion(buildTreeD);
         ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, buildTreeD);
+        return structuralSubsumption(merged, container);
     }
     public boolean isEntailed(@Nonnull OWLClassExpression c, @Nonnull OWLClassExpression d) {
         this.stsCount = 0;
@@ -1234,11 +1235,12 @@ public class PLReasoner implements OWLReasoner {
         collectionOfTrees.add(buildTree);
         //apply interval safe C,H
         ORNODE normalizedIntervalSafety = this.normalizeIntervalSafety(collectionOfTrees,buildTreeD.getORNodes().getFirst());
+        ORNODE container = this.normalizeUnion(buildTreeD);
         ORNODE normalizedUnion = this.normalizeUnion(normalizedIntervalSafety.getDisjunction().getFirst());
         this.applyRange(normalizedUnion);
         ORNODE merged = this.mergeNominal(normalizedUnion);
 
-        return structuralSubsumption(merged, buildTreeD);
+        return structuralSubsumption(merged, container);
     }
     public boolean isEntailed(@Nonnull ANDNODE c,@Nonnull ANDNODE d){
         this.stsCount = 0;

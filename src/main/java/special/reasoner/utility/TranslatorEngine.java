@@ -23,7 +23,7 @@ public class TranslatorEngine {
     public TranslatorEngine(OntologyAxioms ontologyAxioms) {
         this.ontologyAxioms = ontologyAxioms;
     }
-
+/**/
     public JSONArray getJsonArray(File file) {
         byte[] data = new byte[(int) file.length()];
         FileInputStream stream;

@@ -1,14 +1,16 @@
 package special.reasoner;
 
+import org.json.JSONArray;
 import org.semanticweb.owlapi.model.*;
 import special.model.*;
+import special.model.tree.ANDNODE;
+import special.model.tree.ORNODE;
 import special.reasoner.factory.ReasonerBuilder;
 import special.reasoner.utility.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 
 /**
@@ -62,20 +64,21 @@ class Main {
                 "test-results/realistic/compliant/compliant_SIZE_100_20.csv"
         };
         for (int i = 0; i < p.length; i++) {
-           complianceCheckTest(p[i],h[i],o[i] );
+            complianceCheckTest(p[i], h[i], o[i]);
         }
     }
+
     private static void realisticTestNonCompliant() {
        /*
         TESTING ALL NON COMPLIANT WITH HISTORIES
          */
 
-         String[] p = new String[]{
+        String[] p = new String[]{
                 Benchmark.Realistic.Policy.NonCompliant.SIZE_10_2,
                 Benchmark.Realistic.Policy.NonCompliant.SIZE_50_10,
                 Benchmark.Realistic.Policy.NonCompliant.SIZE_100_20,
         };
-         String[] h = new String[]{
+        String[] h = new String[]{
                 Benchmark.Realistic.History.SIZE_10_2,
                 Benchmark.Realistic.History.SIZE_50_10,
                 Benchmark.Realistic.History.SIZE_100_20,
@@ -86,10 +89,11 @@ class Main {
                 "test-results/realistic/non-compliant/non_compliant_SIZE_100_20.csv"
         };
         for (int i = 0; i < p.length; i++) {
-              complianceCheckTest(p[i],h[i],o[i] );
+            complianceCheckTest(p[i], h[i], o[i]);
         }
     }
-    private static void stressTestCompliant(){
+
+    private static void stressTestCompliant() {
         String[] p = new String[]{
                 Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_2,
                 Benchmark.Stress.Policy.Compliant.SIZE_10_OVRD_4,
@@ -115,10 +119,11 @@ class Main {
                 "test-results/stress/compliant/compliant_size_100_OVRD_4.csv",
         };
         for (int i = 0; i < p.length; i++) {
-            complianceCheckTest(p[i],h[i],o[i]);
+            complianceCheckTest(p[i], h[i], o[i]);
         }
     }
-    private static void stressTestNonCompliant(){
+
+    private static void stressTestNonCompliant() {
         String[] p = new String[]{
                 Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_3,
                 Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_5,
@@ -144,45 +149,39 @@ class Main {
                 "test-results/stress/non-compliant/non_compliant_size_100_OVRD_5.csv",
         };
         for (int i = 0; i < p.length; i++) {
-            complianceCheckTest(p[i],h[i],o[i]);
+            complianceCheckTest(p[i], h[i], o[i]);
         }
     }
-    static void test2(){
-    OWLOntology load = OntologyLoader.load(new String[]{
-            "http://www.w3id.org/dpv/dpv-gdpr",
-            "http://www.w3id.org/dpv/dpv-legal",
-            "http://www.w3id.org/dpv/dpv-owl/dpv-pd",
-            "https://w3id.org/dpv/dpv-owl"
-    });
-    PLReasoner reasoner = ReasonerBuilder.buildReasoner(load);
 
-    File c = new File("testSET/Contr-pol-compl-no-exc.json");
-    File h = new File("testSET/hist-10-2-01.json");
-    File d = new File("testSET/Contr-pol-noncompl-exc-003.json");
+    static void test2() {
+        String[] strings = {
+                "http://www.w3id.org/dpv/dpv-gdpr",
+                "http://www.w3id.org/dpv/dpv-legal",
+                "http://www.w3id.org/dpv/dpv-owl/dpv-pd",
+                "https://w3id.org/dpv/dpv-owl"
+        };
+        System.out.println(strings);
+    }
 
-    boolean entailed2 = reasoner.isEntailedHistory(d,h);
 
-    System.out.println(entailed2);
-
-}
     public static void main(String[] args) {
+        final IRI ontologyIRI = IRI.create("http://www.w3id.org/dpv/dpv-gdpr");
+        final OWLOntology ontology = OntologyLoader.load(ontologyIRI);
 
-        stressTestCompliant();
-        stressTestNonCompliant();
     }
 
     static void complianceCheckTest(String policyPath, String historyPath, String outputPath) {
         policyComparison.clear();
-        final PolicyIterator jsonIterator = new PolicyIterator(ontology, policyPath, true);
-            System.out.println(policyPath);
+        final JSONPolicyIterator jsonIterator = new JSONPolicyIterator(ontology, policyPath, true);
+        System.out.println(policyPath);
 
 
         while (jsonIterator.hasNext()) {
 
-         PolicyLogic<OWLClassExpression> owl = jsonIterator.toOwl();
+            PolicyLogic<OWLClassExpression> owl = jsonIterator.toOwl();
 
-            HistoryIterator historyIterator =
-                    new HistoryIterator(ontology, historyPath, true);
+            JSONHistoryIterator historyIterator =
+                    new JSONHistoryIterator(ontology, historyPath, true);
 
 
             while (historyIterator.hasNext()) {
@@ -222,4 +221,45 @@ class Main {
         }
     }
 
+
+    static void test3() {
+        String[] p = new String[]{
+                Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_3,
+                Benchmark.Stress.Policy.NonCompliant.SIZE_10_OVRD_5
+        };
+        String[] h = new String[]{
+                Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_3,
+                Benchmark.Stress.History.NonCompliant.SIZE_10_OVRD_5
+        };
+        TranslatorEngine translatorEngine = new TranslatorEngine(new OntologyAxioms(ontology));
+        for (String s : p) {
+            File x = new File(s);
+            for (File left : Objects.requireNonNull(x.listFiles())) {
+                ANDNODE c = translatorEngine.parseJSONPolicy(left);
+                for (String history : h) {
+                    File y = new File(history);
+                    for (File right : Objects.requireNonNull(y.listFiles())) {
+                        SignedPolicy<ANDNODE>[] d = translatorEngine.parseJSONHistory(right);
+                        boolean entailedHistory = plReasoner.isEntailedHistory(left, right);
+                        boolean entailed = plReasoner.isEntailed(c, d);
+                        System.out.println(left.getName() + " vs " + right.getName() + ": [" + entailedHistory + "," + entailed + "]");
+                    }
+                }
+            }
+        }
+    }
+
+    static void test4() {
+        String c = "BenchmarkArchive/dataset/pilot/non-compliance/PROXIMUS1/policies/Policies/DataControllerPolicies/";
+        String p1 = "BenchmarkArchive/dataset/pilot/non-compliance/PROXIMUS1/policies/Policies/DataSubjectPolicies/";
+        OWLPolicyIterator i = new OWLPolicyIterator(p1);
+        OWLPolicyIterator ic = new OWLPolicyIterator(c);
+
+        PolicyLogic<OWLClassExpression> policy = ic.next();
+        while (i.hasNext()) {
+            PolicyLogic<OWLClassExpression> next = i.next();
+            boolean entailed = plReasoner.isEntailed(policy.expression(), next.expression());
+            System.out.println(entailed);
+        }
+    }
 }
