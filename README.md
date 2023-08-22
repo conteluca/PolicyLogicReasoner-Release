@@ -104,7 +104,7 @@ First step is load ontology into your project using the methods from OntologyLoa
           public static void main(String[] args) {
             final File a = new File("path/policies/policy.json");
             final File b = new File("path/policies/history.json");
-            final HashSet<String> set = new HashSet<>();
+            final HashSet<File> set = new HashSet<>();
             set.add(a);
             set.add(b);
             final Set<String> ontologyNames = OntologyLoader.getOntologyNames(set);

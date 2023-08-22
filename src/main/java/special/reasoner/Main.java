@@ -153,23 +153,9 @@ class Main {
         }
     }
 
-    static void test2() {
-        String[] strings = {
-                "http://www.w3id.org/dpv/dpv-gdpr",
-                "http://www.w3id.org/dpv/dpv-legal",
-                "http://www.w3id.org/dpv/dpv-owl/dpv-pd",
-                "https://w3id.org/dpv/dpv-owl"
-        };
-        System.out.println(strings);
-    }
-
-
     public static void main(String[] args) {
-        final IRI ontologyIRI = IRI.create("http://www.w3id.org/dpv/dpv-gdpr");
-        final OWLOntology ontology = OntologyLoader.load(ontologyIRI);
 
     }
-
     static void complianceCheckTest(String policyPath, String historyPath, String outputPath) {
         policyComparison.clear();
         final JSONPolicyIterator jsonIterator = new JSONPolicyIterator(ontology, policyPath, true);
@@ -221,6 +207,15 @@ class Main {
         }
     }
 
+    static void test2() {
+        String[] strings = {
+                "http://www.w3id.org/dpv/dpv-gdpr",
+                "http://www.w3id.org/dpv/dpv-legal",
+                "http://www.w3id.org/dpv/dpv-owl/dpv-pd",
+                "https://w3id.org/dpv/dpv-owl"
+        };
+        System.out.println(strings);
+    }
 
     static void test3() {
         String[] p = new String[]{
